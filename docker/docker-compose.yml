@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  sentinel-frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      - sentinel-backend
+
+  sentinel-backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sentinel:sentinel_secret@sentinel-db:5432/sentinel_db
+      - JWT_SECRET=super_secret_soc_key_2026
+    depends_on:
+      - sentinel-db
+
+  sentinel-db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=sentinel
+      - POSTGRES_PASSWORD=sentinel_secret
+      - POSTGRES_DB=sentinel_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:

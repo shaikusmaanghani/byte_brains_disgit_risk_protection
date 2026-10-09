@@ -1,0 +1,942 @@
+{
+  "brand": {
+    "id": "brand-acme-financial",
+    "name": "Acme Financial",
+    "logoUrl": "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=128&auto=format&fit=crop&q=80",
+    "aliases": [
+      "Acme Bank",
+      "Acme FinTech",
+      "Acme Financial Group",
+      "Acme"
+    ],
+    "officialDomains": [
+      "acmefinancial.com",
+      "acmebank.com",
+      "acme-corp.com"
+    ],
+    "brandKeywords": [
+      "banking",
+      "checking account",
+      "savings",
+      "wealth management",
+      "wire transfer",
+      "mobile deposit",
+      "acme credit",
+      "online banking"
+    ],
+    "productNames": [
+      "Acme Mobile Banking",
+      "Acme Wealth Portal",
+      "Acme QuickPay"
+    ],
+    "supportEmailDomains": [
+      "acmefinancial.com",
+      "support.acmefinancial.com"
+    ],
+    "officialWebsite": "https://www.acmefinancial.com",
+    "companyDescription": "Acme Financial is an enterprise banking institution providing FDIC-insured retail accounts, wealth advisory services, and digital mobile banking applications.",
+    "knownPublishers": [
+      "Acme Financial Technologies LLC",
+      "Acme Corporate Systems"
+    ],
+    "knownDevelopers": [
+      "Acme Financial Technologies Dev Team",
+      "Acme Mobile Engineering"
+    ],
+    "officialApps": [
+      {
+        "id": "app-acme-android",
+        "appName": "Acme Mobile Banking",
+        "packageId": "com.acme.mobilebanking",
+        "platform": "google_play",
+        "developer": "Acme Financial Technologies Dev Team",
+        "publisher": "Acme Financial Technologies LLC",
+        "storeUrl": "https://play.google.com/store/apps/details?id=com.acme.mobilebanking",
+        "version": "4.8.2",
+        "category": "Finance",
+        "iconUrl": "/brand_logo.svg",
+        "officialDomain": "acmefinancial.com"
+      },
+      {
+        "id": "app-acme-ios",
+        "appName": "Acme Mobile Banking",
+        "packageId": "com.acme.mobilebanking.ios",
+        "platform": "apple_app_store",
+        "developer": "Acme Financial Technologies LLC",
+        "publisher": "Acme Financial Technologies LLC",
+        "storeUrl": "https://apps.apple.com/us/app/acme-mobile-banking/id1492048123",
+        "version": "4.8.2",
+        "category": "Finance",
+        "iconUrl": "/brand_logo.svg",
+        "officialDomain": "acmefinancial.com"
+      }
+    ],
+    "officialSocialAccounts": [
+      {
+        "id": "soc-x-acme",
+        "platform": "x_twitter",
+        "handle": "AcmeFinancial",
+        "profileName": "Acme Financial Official",
+        "profileUrl": "https://x.com/AcmeFinancial",
+        "verified": true
+      },
+      {
+        "id": "soc-li-acme",
+        "platform": "linkedin",
+        "handle": "acme-financial-group",
+        "profileName": "Acme Financial Group",
+        "profileUrl": "https://linkedin.com/company/acme-financial-group",
+        "verified": true
+      },
+      {
+        "id": "soc-ig-acme",
+        "platform": "instagram",
+        "handle": "acmefinancial",
+        "profileName": "Acme Financial Official",
+        "profileUrl": "https://instagram.com/acmefinancial",
+        "verified": true
+      }
+    ],
+    "createdAt": "2026-01-15T09:00:00Z",
+    "updatedAt": "2026-10-08T10:00:00Z"
+  },
+  "users": [
+    {
+      "id": "usr-admin-1",
+      "name": "Marcus Vance",
+      "email": "admin@sentinelshield.io",
+      "role": "admin",
+      "department": "Threat Intelligence & Brand Security"
+    },
+    {
+      "id": "usr-analyst-1",
+      "name": "Sarah Chen",
+      "email": "sarah.chen@sentinelshield.io",
+      "role": "analyst",
+      "department": "SOC Tier 2 Cyber Investigations"
+    },
+    {
+      "id": "usr-viewer-1",
+      "name": "David Mercer",
+      "email": "viewer@sentinelshield.io",
+      "role": "viewer",
+      "department": "Risk & Legal Compliance"
+    }
+  ],
+  "findings": [
+    {
+      "id": "find-app-001",
+      "brandId": "brand-acme-financial",
+      "assetType": "mobile_application",
+      "platform": "google_play",
+      "candidateName": "Acme Mobile Banking",
+      "identifier": "com.fake.acme.bank",
+      "url": "https://play.google.com/store/apps/details?id=com.fake.acme.bank",
+      "publisherOrDeveloper": "Rogue Apps LLC",
+      "descriptionSnippet": "Official Acme secure banking application. Verify your account and receive welcome rewards. Fast money transfers and deposit check scanning.",
+      "riskScore": 92,
+      "riskLevel": "critical",
+      "classification": "high_risk_impersonation",
+      "confidence": 0.94,
+      "status": "confirmed_threat",
+      "firstSeen": "2026-10-07T04:12:00Z",
+      "lastSeen": "2026-10-08T11:20:00Z",
+      "assignedAnalyst": "Sarah Chen",
+      "notes": [
+        {
+          "id": "note-1",
+          "authorName": "Sarah Chen",
+          "authorEmail": "sarah.chen@sentinelshield.io",
+          "createdAt": "2026-10-07T05:30:00Z",
+          "content": "Candidate requests SMS interception permissions. Package ID registered in Russian ASN. Takedown notice queued to Google Play Trust & Safety.",
+          "actionTaken": "Status updated to Confirmed Threat"
+        }
+      ],
+      "signals": [
+        {
+          "type": "name_similarity",
+          "score": 25,
+          "weight": 25,
+          "explanation": "Application name \"Acme Mobile Banking\" matches registered brand identity with high fidelity (100%).",
+          "highlightDetails": {
+            "candidateValue": "Acme Mobile Banking",
+            "officialValue": "Acme Mobile Banking"
+          }
+        },
+        {
+          "type": "publisher_mismatch",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Publisher \"Rogue Apps LLC\" does not match registered official publisher \"Acme Financial Technologies LLC\".",
+          "highlightDetails": {
+            "candidateValue": "Rogue Apps LLC",
+            "officialValue": "Acme Financial Technologies LLC"
+          }
+        },
+        {
+          "type": "developer_mismatch",
+          "score": 15,
+          "weight": 15,
+          "explanation": "Developer \"Rogue Apps LLC\" does not match the official developer on record.",
+          "highlightDetails": {
+            "candidateValue": "Rogue Apps LLC",
+            "officialValue": "Acme Financial Technologies Dev Team"
+          }
+        },
+        {
+          "type": "description_similarity",
+          "score": 8,
+          "weight": 15,
+          "explanation": "Candidate description references official brand terminology (banking)."
+        },
+        {
+          "type": "package_mismatch",
+          "score": 5,
+          "weight": 5,
+          "explanation": "Candidate bundle/package ID \"com.fake.acme.bank\" differs from legitimate package ID \"com.acme.mobilebanking\".",
+          "highlightDetails": {
+            "candidateValue": "com.fake.acme.bank",
+            "officialValue": "com.acme.mobilebanking"
+          }
+        },
+        {
+          "type": "domain_mismatch",
+          "score": 5,
+          "weight": 5,
+          "explanation": "Support website \"https://security-verify-acme.biz\" is not hosted on any authorized company domain (acmefinancial.com, acmebank.com, acme-corp.com).",
+          "highlightDetails": {
+            "candidateValue": "https://security-verify-acme.biz",
+            "officialValue": "acmefinancial.com"
+          }
+        },
+        {
+          "type": "suspicious_keywords",
+          "score": 5,
+          "weight": 5,
+          "explanation": "High-risk phrases: [verify your account]; Sensitive permissions: [android.permission.READ_SMS, android.permission.RECEIVE_SMS]"
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 25,
+        "publisherMismatch": 20,
+        "developerMismatch": 15,
+        "descriptionSimilarity": 15,
+        "domainMismatch": 5,
+        "packageMismatch": 5,
+        "logoSimilarity": 10,
+        "suspiciousKeywords": 5
+      },
+      "recommendedAction": "Initiate immediate app store takedown escalation and publish consumer security advisory.",
+      "summaryExplanation": "High-confidence impersonation candidate. Replicates \"Acme Mobile Banking\" while published by unauthorized entity \"Rogue Apps LLC\".",
+      "matchedOfficialAsset": {
+        "id": "app-acme-android",
+        "appName": "Acme Mobile Banking",
+        "packageId": "com.acme.mobilebanking",
+        "platform": "google_play",
+        "developer": "Acme Financial Technologies Dev Team",
+        "publisher": "Acme Financial Technologies LLC",
+        "storeUrl": "https://play.google.com/store/apps/details?id=com.acme.mobilebanking",
+        "version": "4.8.2",
+        "category": "Finance",
+        "iconUrl": "/brand_logo.svg",
+        "officialDomain": "acmefinancial.com"
+      },
+      "candidatePayload": {
+        "appName": "Acme Mobile Banking",
+        "developer": "Rogue Apps LLC",
+        "publisher": "Rogue Apps LLC",
+        "packageId": "com.fake.acme.bank",
+        "platform": "google_play",
+        "description": "Official Acme secure banking application. Verify your account and receive welcome rewards. Fast money transfers and deposit check scanning.",
+        "website": "https://security-verify-acme.biz",
+        "permissions": [
+          "android.permission.READ_SMS",
+          "android.permission.RECEIVE_SMS",
+          "android.permission.SYSTEM_ALERT_WINDOW"
+        ]
+      },
+      "isSimulated": true
+    },
+    {
+      "id": "find-app-002",
+      "brandId": "brand-acme-financial",
+      "assetType": "mobile_application",
+      "platform": "google_play",
+      "candidateName": "Acme Finanical Banking",
+      "identifier": "com.quicksoft.acme.finanical",
+      "url": "https://play.google.com/store/apps/details?id=com.quicksoft.acme.finanical",
+      "publisherOrDeveloper": "FinTech QuickSoft",
+      "descriptionSnippet": "Manage accounts and check balances securely with Acme Finanical mobile app.",
+      "riskScore": 52,
+      "riskLevel": "medium",
+      "classification": "suspicious",
+      "confidence": 0.8,
+      "status": "investigating",
+      "firstSeen": "2026-10-06T14:22:00Z",
+      "lastSeen": "2026-10-08T09:15:00Z",
+      "assignedAnalyst": "Sarah Chen",
+      "notes": [],
+      "signals": [
+        {
+          "type": "name_similarity",
+          "score": 12,
+          "weight": 25,
+          "explanation": "Moderate brand name overlap detected (60%)."
+        },
+        {
+          "type": "publisher_mismatch",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Publisher \"FinTech QuickSoft\" does not match registered official publisher \"Acme Financial Technologies LLC\".",
+          "highlightDetails": {
+            "candidateValue": "FinTech QuickSoft",
+            "officialValue": "Acme Financial Technologies LLC"
+          }
+        },
+        {
+          "type": "developer_mismatch",
+          "score": 15,
+          "weight": 15,
+          "explanation": "Developer \"FinTech QuickSoft\" does not match the official developer on record.",
+          "highlightDetails": {
+            "candidateValue": "FinTech QuickSoft",
+            "officialValue": "Acme Financial Technologies Dev Team"
+          }
+        },
+        {
+          "type": "package_mismatch",
+          "score": 5,
+          "weight": 5,
+          "explanation": "Candidate bundle/package ID \"com.quicksoft.acme.finanical\" differs from legitimate package ID \"com.acme.mobilebanking\".",
+          "highlightDetails": {
+            "candidateValue": "com.quicksoft.acme.finanical",
+            "officialValue": "com.acme.mobilebanking"
+          }
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 12,
+        "publisherMismatch": 20,
+        "developerMismatch": 15,
+        "descriptionSimilarity": 0,
+        "domainMismatch": 0,
+        "packageMismatch": 5,
+        "logoSimilarity": 0,
+        "suspiciousKeywords": 0
+      },
+      "recommendedAction": "Assign analyst to verify relationship and monitor version updates.",
+      "summaryExplanation": "Suspicious application bearing partial brand naming cues.",
+      "matchedOfficialAsset": {
+        "id": "app-acme-android",
+        "appName": "Acme Mobile Banking",
+        "packageId": "com.acme.mobilebanking",
+        "platform": "google_play",
+        "developer": "Acme Financial Technologies Dev Team",
+        "publisher": "Acme Financial Technologies LLC",
+        "storeUrl": "https://play.google.com/store/apps/details?id=com.acme.mobilebanking",
+        "version": "4.8.2",
+        "category": "Finance",
+        "iconUrl": "/brand_logo.svg",
+        "officialDomain": "acmefinancial.com"
+      },
+      "candidatePayload": {
+        "appName": "Acme Finanical Banking",
+        "developer": "FinTech QuickSoft",
+        "publisher": "FinTech QuickSoft",
+        "packageId": "com.quicksoft.acme.finanical",
+        "platform": "google_play",
+        "description": "Manage accounts and check balances securely with Acme Finanical mobile app."
+      },
+      "isSimulated": true
+    },
+    {
+      "id": "find-app-003",
+      "brandId": "brand-acme-financial",
+      "assetType": "mobile_application",
+      "platform": "google_play",
+      "candidateName": "Acme Financial Support",
+      "identifier": "com.globaltech.acme.support",
+      "url": "https://play.google.com/store/apps/details?id=com.globaltech.acme.support",
+      "publisherOrDeveloper": "Global Tech Support LLC",
+      "descriptionSnippet": "Urgent customer support, account verification, and emergency card locks for Acme Financial cardholders.",
+      "riskScore": 70,
+      "riskLevel": "high",
+      "classification": "potential_impersonation",
+      "confidence": 0.88,
+      "status": "new",
+      "firstSeen": "2026-10-08T08:10:00Z",
+      "lastSeen": "2026-10-08T11:00:00Z",
+      "notes": [],
+      "signals": [
+        {
+          "type": "name_similarity",
+          "score": 20,
+          "weight": 25,
+          "explanation": "Application name \"Acme Financial Support\" embeds protected brand name with added words.",
+          "highlightDetails": {
+            "candidateValue": "Acme Financial Support",
+            "officialValue": "Acme Mobile Banking"
+          }
+        },
+        {
+          "type": "publisher_mismatch",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Publisher \"Global Tech Support LLC\" does not match registered official publisher \"Acme Financial Technologies LLC\".",
+          "highlightDetails": {
+            "candidateValue": "Global Tech Support LLC",
+            "officialValue": "Acme Financial Technologies LLC"
+          }
+        },
+        {
+          "type": "developer_mismatch",
+          "score": 15,
+          "weight": 15,
+          "explanation": "Developer \"Global Tech Support LLC\" does not match the official developer on record.",
+          "highlightDetails": {
+            "candidateValue": "Global Tech Support LLC",
+            "officialValue": "Acme Financial Technologies Dev Team"
+          }
+        },
+        {
+          "type": "package_mismatch",
+          "score": 5,
+          "weight": 5,
+          "explanation": "Candidate bundle/package ID \"com.globaltech.acme.support\" differs from legitimate package ID \"com.acme.mobilebanking\".",
+          "highlightDetails": {
+            "candidateValue": "com.globaltech.acme.support",
+            "officialValue": "com.acme.mobilebanking"
+          }
+        },
+        {
+          "type": "domain_mismatch",
+          "score": 5,
+          "weight": 5,
+          "explanation": "Support website \"https://acme-support-livehelp.com\" is not hosted on any authorized company domain (acmefinancial.com, acmebank.com, acme-corp.com).",
+          "highlightDetails": {
+            "candidateValue": "https://acme-support-livehelp.com",
+            "officialValue": "acmefinancial.com"
+          }
+        },
+        {
+          "type": "suspicious_keywords",
+          "score": 5,
+          "weight": 5,
+          "explanation": "High-risk phrases: [customer support, account verification]"
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 20,
+        "publisherMismatch": 20,
+        "developerMismatch": 15,
+        "descriptionSimilarity": 0,
+        "domainMismatch": 5,
+        "packageMismatch": 5,
+        "logoSimilarity": 0,
+        "suspiciousKeywords": 5
+      },
+      "recommendedAction": "Review publisher authenticity, inspect APK/IPA binary permissions, and verify developer ownership.",
+      "summaryExplanation": "Potential unauthorized derivative or publisher mismatch masquerading as Acme Financial.",
+      "matchedOfficialAsset": {
+        "id": "app-acme-android",
+        "appName": "Acme Mobile Banking",
+        "packageId": "com.acme.mobilebanking",
+        "platform": "google_play",
+        "developer": "Acme Financial Technologies Dev Team",
+        "publisher": "Acme Financial Technologies LLC",
+        "storeUrl": "https://play.google.com/store/apps/details?id=com.acme.mobilebanking",
+        "version": "4.8.2",
+        "category": "Finance",
+        "iconUrl": "/brand_logo.svg",
+        "officialDomain": "acmefinancial.com"
+      },
+      "candidatePayload": {
+        "appName": "Acme Financial Support",
+        "developer": "Global Tech Support LLC",
+        "publisher": "Global Tech Support LLC",
+        "packageId": "com.globaltech.acme.support",
+        "platform": "google_play",
+        "description": "Urgent customer support, account verification, and emergency card locks for Acme Financial cardholders.",
+        "website": "https://acme-support-livehelp.com"
+      },
+      "isSimulated": true
+    },
+    {
+      "id": "find-soc-001",
+      "brandId": "brand-acme-financial",
+      "assetType": "social_profile",
+      "platform": "x_twitter",
+      "candidateName": "Acme Financial",
+      "identifier": "@acme_financiaI",
+      "url": "https://x.com/acme_financiaI",
+      "publisherOrDeveloper": "@acme_financiaI",
+      "descriptionSnippet": "Official corporate account for Acme Financial clients. Direct message us for urgent support and inquiries.",
+      "riskScore": 100,
+      "riskLevel": "critical",
+      "classification": "high_risk_impersonation",
+      "confidence": 0.95,
+      "status": "new",
+      "firstSeen": "2026-10-08T09:40:00Z",
+      "lastSeen": "2026-10-08T11:30:00Z",
+      "notes": [],
+      "signals": [
+        {
+          "type": "homoglyph_detected",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Homoglyph character substitution detected: [I (Confusable Latin Uppercase I for Lowercase l)]. Highly characteristic of typo-squatting or visual spoofing.",
+          "highlightDetails": {
+            "candidateValue": "acme_financiaI",
+            "homoglyphsFound": [
+              "I (Confusable Latin Uppercase I for Lowercase l)"
+            ]
+          }
+        },
+        {
+          "type": "username_similarity",
+          "score": 25,
+          "weight": 25,
+          "explanation": "Username @acme_financiaI is nearly indistinguishable from official brand identifier (@AcmeFinancial).",
+          "highlightDetails": {
+            "candidateValue": "acme_financiaI",
+            "officialValue": "AcmeFinancial"
+          }
+        },
+        {
+          "type": "name_similarity",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Profile display name \"Acme Financial\" mimics protected brand name \"Acme Financial\"."
+        },
+        {
+          "type": "suspicious_keywords",
+          "score": 15,
+          "weight": 15,
+          "explanation": "Biography incorporates high-risk social engineering lures: [urgent support].",
+          "evidenceSnippet": "Official corporate account for Acme Financial clients. Direct message us for urgent support and inquiries."
+        },
+        {
+          "type": "domain_mismatch",
+          "score": 15,
+          "weight": 15,
+          "explanation": "External bio links point to unauthorized third-party destinations (https://t.me/acme_financial_help).",
+          "highlightDetails": {
+            "candidateValue": "https://t.me/acme_financial_help",
+            "officialValue": "acmefinancial.com"
+          }
+        },
+        {
+          "type": "verification_mismatch",
+          "score": 10,
+          "weight": 10,
+          "explanation": "Official handle @AcmeFinancial holds verified status, while candidate profile lacks verification badge."
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 20,
+        "publisherMismatch": 0,
+        "developerMismatch": 0,
+        "descriptionSimilarity": 15,
+        "domainMismatch": 15,
+        "packageMismatch": 0,
+        "logoSimilarity": 0,
+        "suspiciousKeywords": 15
+      },
+      "recommendedAction": "Execute fast-track brand impersonation DMCA / Terms of Service takedown notice via platform API.",
+      "summaryExplanation": "Homoglyph substitution detected: Latin uppercase I used to spoof lowercase l in official handle.",
+      "matchedOfficialAsset": {
+        "id": "soc-x-acme",
+        "platform": "x_twitter",
+        "handle": "AcmeFinancial",
+        "profileName": "Acme Financial Official",
+        "profileUrl": "https://x.com/AcmeFinancial",
+        "verified": true
+      },
+      "candidatePayload": {
+        "platform": "x_twitter",
+        "username": "acme_financiaI",
+        "profileName": "Acme Financial",
+        "biography": "Official corporate account for Acme Financial clients. Direct message us for urgent support and inquiries.",
+        "links": [
+          "https://t.me/acme_financial_help"
+        ],
+        "verified": false
+      },
+      "isSimulated": true
+    },
+    {
+      "id": "find-soc-002",
+      "brandId": "brand-acme-financial",
+      "assetType": "social_profile",
+      "platform": "x_twitter",
+      "candidateName": "Acme Financial Customer Care",
+      "identifier": "@acme_financial_support",
+      "url": "https://x.com/acme_financial_support",
+      "publisherOrDeveloper": "@acme_financial_support",
+      "descriptionSnippet": "24/7 Priority Support desk. Account verification, urgent support, claim reward for recent system outage.",
+      "riskScore": 84,
+      "riskLevel": "critical",
+      "classification": "high_risk_impersonation",
+      "confidence": 0.92,
+      "status": "investigating",
+      "firstSeen": "2026-10-07T12:00:00Z",
+      "lastSeen": "2026-10-08T10:45:00Z",
+      "assignedAnalyst": "Sarah Chen",
+      "notes": [],
+      "signals": [
+        {
+          "type": "username_similarity",
+          "score": 20,
+          "weight": 25,
+          "explanation": "Username contains core brand token \"Acme Financial\" combined with modifier terms (e.g., support/help/official).",
+          "highlightDetails": {
+            "candidateValue": "acme_financial_support",
+            "officialValue": "Acme Financial"
+          }
+        },
+        {
+          "type": "name_similarity",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Profile display name \"Acme Financial Customer Care\" mimics protected brand name \"Acme Financial\"."
+        },
+        {
+          "type": "suspicious_keywords",
+          "score": 15,
+          "weight": 15,
+          "explanation": "Biography incorporates high-risk social engineering lures: [urgent support, claim reward, account verification].",
+          "evidenceSnippet": "24/7 Priority Support desk. Account verification, urgent support, claim reward for recent system outage."
+        },
+        {
+          "type": "domain_mismatch",
+          "score": 15,
+          "weight": 15,
+          "explanation": "External bio links point to unauthorized third-party destinations (https://acme-rewards-claim.xyz).",
+          "highlightDetails": {
+            "candidateValue": "https://acme-rewards-claim.xyz",
+            "officialValue": "acmefinancial.com"
+          }
+        },
+        {
+          "type": "verification_mismatch",
+          "score": 10,
+          "weight": 10,
+          "explanation": "Official handle @AcmeFinancial holds verified status, while candidate profile lacks verification badge."
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 20,
+        "publisherMismatch": 0,
+        "developerMismatch": 0,
+        "descriptionSimilarity": 15,
+        "domainMismatch": 15,
+        "packageMismatch": 0,
+        "logoSimilarity": 0,
+        "suspiciousKeywords": 15
+      },
+      "recommendedAction": "Execute fast-track brand impersonation DMCA / Terms of Service takedown notice via platform API.",
+      "summaryExplanation": "High-risk social profile spoofing @AcmeFinancial using brand imagery, lures, and unauthorized web links.",
+      "matchedOfficialAsset": {
+        "id": "soc-x-acme",
+        "platform": "x_twitter",
+        "handle": "AcmeFinancial",
+        "profileName": "Acme Financial Official",
+        "profileUrl": "https://x.com/AcmeFinancial",
+        "verified": true
+      },
+      "candidatePayload": {
+        "platform": "x_twitter",
+        "username": "acme_financial_support",
+        "profileName": "Acme Financial Customer Care",
+        "biography": "24/7 Priority Support desk. Account verification, urgent support, claim reward for recent system outage.",
+        "links": [
+          "https://acme-rewards-claim.xyz"
+        ],
+        "verified": false
+      },
+      "isSimulated": true
+    },
+    {
+      "id": "find-soc-003",
+      "brandId": "brand-acme-financial",
+      "assetType": "social_profile",
+      "platform": "instagram",
+      "candidateName": "Acme Financial Group",
+      "identifier": "@acme_financial_official",
+      "url": "https://instagram.com/acme_financial_official",
+      "publisherOrDeveloper": "@acme_financial_official",
+      "descriptionSnippet": "Welcome to Acme Financial on Instagram. Investment opportunity giveaways and private wealth consultations.",
+      "riskScore": 78,
+      "riskLevel": "high",
+      "classification": "potential_impersonation",
+      "confidence": 0.89,
+      "status": "new",
+      "firstSeen": "2026-10-08T03:30:00Z",
+      "lastSeen": "2026-10-08T09:12:00Z",
+      "notes": [],
+      "signals": [
+        {
+          "type": "username_similarity",
+          "score": 20,
+          "weight": 25,
+          "explanation": "Username contains core brand token \"Acme Financial\" combined with modifier terms (e.g., support/help/official).",
+          "highlightDetails": {
+            "candidateValue": "acme_financial_official",
+            "officialValue": "Acme Financial"
+          }
+        },
+        {
+          "type": "name_similarity",
+          "score": 20,
+          "weight": 20,
+          "explanation": "Profile display name \"Acme Financial Group\" mimics protected brand name \"Acme Financial\"."
+        },
+        {
+          "type": "suspicious_keywords",
+          "score": 15,
+          "weight": 15,
+          "explanation": "Biography incorporates high-risk social engineering lures: [giveaway, investment opportunity].",
+          "evidenceSnippet": "Welcome to Acme Financial on Instagram. Investment opportunity giveaways and private wealth consultations."
+        },
+        {
+          "type": "domain_mismatch",
+          "score": 15,
+          "weight": 15,
+          "explanation": "External bio links point to unauthorized third-party destinations (https://linktr.ee/acme_financial_crypto).",
+          "highlightDetails": {
+            "candidateValue": "https://linktr.ee/acme_financial_crypto",
+            "officialValue": "acmefinancial.com"
+          }
+        },
+        {
+          "type": "verification_mismatch",
+          "score": 10,
+          "weight": 10,
+          "explanation": "Official handle @acmefinancial holds verified status, while candidate profile lacks verification badge."
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 20,
+        "publisherMismatch": 0,
+        "developerMismatch": 0,
+        "descriptionSimilarity": 15,
+        "domainMismatch": 15,
+        "packageMismatch": 0,
+        "logoSimilarity": 0,
+        "suspiciousKeywords": 15
+      },
+      "recommendedAction": "Execute fast-track brand impersonation DMCA / Terms of Service takedown notice via platform API.",
+      "summaryExplanation": "High-risk social profile spoofing @acmefinancial using brand imagery, lures, and unauthorized web links.",
+      "matchedOfficialAsset": {
+        "id": "soc-ig-acme",
+        "platform": "instagram",
+        "handle": "acmefinancial",
+        "profileName": "Acme Financial Official",
+        "profileUrl": "https://instagram.com/acmefinancial",
+        "verified": true
+      },
+      "candidatePayload": {
+        "platform": "instagram",
+        "username": "acme_financial_official",
+        "profileName": "Acme Financial Group",
+        "biography": "Welcome to Acme Financial on Instagram. Investment opportunity giveaways and private wealth consultations.",
+        "links": [
+          "https://linktr.ee/acme_financial_crypto"
+        ],
+        "verified": false
+      },
+      "isSimulated": true
+    },
+    {
+      "id": "find-app-004",
+      "brandId": "brand-acme-financial",
+      "assetType": "mobile_application",
+      "platform": "google_play",
+      "candidateName": "Acme Finance News & Markets",
+      "identifier": "com.marketpulse.acmenews",
+      "url": "https://play.google.com/store/apps/details?id=com.marketpulse.acmenews",
+      "publisherOrDeveloper": "Independent Market Pulse",
+      "descriptionSnippet": "Independent news analysis covering NYSE equities including Acme Financial stock trends and quarterly earnings.",
+      "riskScore": 18,
+      "riskLevel": "low",
+      "classification": "likely_legitimate",
+      "confidence": 0.8,
+      "status": "resolved",
+      "firstSeen": "2026-10-04T10:00:00Z",
+      "lastSeen": "2026-10-08T08:00:00Z",
+      "assignedAnalyst": "Sarah Chen",
+      "notes": [
+        {
+          "id": "note-2",
+          "authorName": "Sarah Chen",
+          "authorEmail": "sarah.chen@sentinelshield.io",
+          "createdAt": "2026-10-05T11:00:00Z",
+          "content": "Verified as financial journalism application with editorial disclaimer. No impersonation cues.",
+          "actionTaken": "Status updated to Resolved"
+        }
+      ],
+      "signals": [
+        {
+          "type": "name_similarity",
+          "score": 5,
+          "weight": 25,
+          "explanation": "Low brand name resemblance (50%)."
+        },
+        {
+          "type": "publisher_mismatch",
+          "score": 10,
+          "weight": 20,
+          "explanation": "Publisher \"Independent Market Pulse\" is not in the organization's verified publisher whitelist."
+        }
+      ],
+      "radarBreakdown": {
+        "nameSimilarity": 5,
+        "publisherMismatch": 10,
+        "developerMismatch": 8,
+        "descriptionSimilarity": 0,
+        "domainMismatch": 0,
+        "packageMismatch": 0,
+        "logoSimilarity": 0,
+        "suspiciousKeywords": 0
+      },
+      "recommendedAction": "No takedown needed. Maintain on informational log.",
+      "summaryExplanation": "News aggregator discussing corporate earnings; low impersonation risk.",
+      "matchedOfficialAsset": {
+        "id": "app-acme-android",
+        "appName": "Acme Mobile Banking",
+        "packageId": "com.acme.mobilebanking",
+        "platform": "google_play",
+        "developer": "Acme Financial Technologies Dev Team",
+        "publisher": "Acme Financial Technologies LLC",
+        "storeUrl": "https://play.google.com/store/apps/details?id=com.acme.mobilebanking",
+        "version": "4.8.2",
+        "category": "Finance",
+        "iconUrl": "/brand_logo.svg",
+        "officialDomain": "acmefinancial.com"
+      },
+      "candidatePayload": {
+        "appName": "Acme Finance News & Markets",
+        "developer": "Independent Market Pulse",
+        "publisher": "Independent Market Pulse",
+        "packageId": "com.marketpulse.acmenews",
+        "platform": "google_play",
+        "description": "Independent news analysis covering NYSE equities including Acme Financial stock trends and quarterly earnings.",
+        "website": "https://marketpulsenews.com"
+      },
+      "isSimulated": true
+    }
+  ],
+  "sources": [
+    {
+      "id": "src-play",
+      "name": "Google Play Store",
+      "type": "app_store",
+      "platform": "google_play",
+      "status": "simulated",
+      "lastSync": "2026-10-08T11:15:00Z",
+      "recordsScanned": 14208,
+      "threatsDetected": 4,
+      "syncIntervalHours": 4
+    },
+    {
+      "id": "src-appstore",
+      "name": "Apple App Store",
+      "type": "app_store",
+      "platform": "apple_app_store",
+      "status": "simulated",
+      "lastSync": "2026-10-08T10:45:00Z",
+      "recordsScanned": 9840,
+      "threatsDetected": 1,
+      "syncIntervalHours": 6
+    },
+    {
+      "id": "src-x",
+      "name": "X / Twitter Intelligence Feed",
+      "type": "social",
+      "platform": "x_twitter",
+      "status": "simulated",
+      "lastSync": "2026-10-08T11:28:00Z",
+      "recordsScanned": 38200,
+      "threatsDetected": 6,
+      "syncIntervalHours": 1
+    },
+    {
+      "id": "src-instagram",
+      "name": "Instagram Graph Monitor",
+      "type": "social",
+      "platform": "instagram",
+      "status": "simulated",
+      "lastSync": "2026-10-08T09:12:00Z",
+      "recordsScanned": 18450,
+      "threatsDetected": 2,
+      "syncIntervalHours": 2
+    },
+    {
+      "id": "src-linkedin",
+      "name": "LinkedIn Company Scraper",
+      "type": "social",
+      "platform": "linkedin",
+      "status": "simulated",
+      "lastSync": "2026-10-08T08:30:00Z",
+      "recordsScanned": 7120,
+      "threatsDetected": 1,
+      "syncIntervalHours": 8
+    },
+    {
+      "id": "src-facebook",
+      "name": "Facebook Pages Indexer",
+      "type": "social",
+      "platform": "facebook",
+      "status": "simulated",
+      "lastSync": "2026-10-08T07:50:00Z",
+      "recordsScanned": 12400,
+      "threatsDetected": 1,
+      "syncIntervalHours": 4
+    },
+    {
+      "id": "src-youtube",
+      "name": "YouTube Channel Scanner",
+      "type": "social",
+      "platform": "youtube",
+      "status": "simulated",
+      "lastSync": "2026-10-08T06:00:00Z",
+      "recordsScanned": 5200,
+      "threatsDetected": 0,
+      "syncIntervalHours": 12
+    }
+  ],
+  "watchlists": [
+    {
+      "id": "w-1",
+      "name": "Crypto & Banking Phishing Lures",
+      "targetType": "keyword",
+      "pattern": "claim reward|verify your account|airdrop|urgent hotline|free bonus",
+      "severity": "critical",
+      "enabled": true,
+      "hitsCount": 14,
+      "createdAt": "2026-02-01T10:00:00Z"
+    },
+    {
+      "id": "w-2",
+      "name": "Known Rogue Android Studios",
+      "targetType": "publisher",
+      "pattern": "Rogue Apps LLC|FastApps Studio|ShadowSoft APK",
+      "severity": "critical",
+      "enabled": true,
+      "hitsCount": 8,
+      "createdAt": "2026-02-10T10:00:00Z"
+    },
+    {
+      "id": "w-3",
+      "name": "Domain Typosquat TLDs",
+      "targetType": "domain",
+      "pattern": ".biz|.xyz|.top|.claims|.support-online.net",
+      "severity": "high",
+      "enabled": true,
+      "hitsCount": 22,
+      "createdAt": "2026-03-01T10:00:00Z"
+    }
+  ],
+  "lastScanTime": "2026-10-08T11:28:00Z",
+  "totalScansCount": 42
+}

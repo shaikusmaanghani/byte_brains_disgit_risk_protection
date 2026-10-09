@@ -1,0 +1,6 @@
+{
+  "name": "SentinelShield — Digital Risk Protection",
+  "description": "Enterprise brand impersonation and digital risk protection platform monitoring mobile app stores and social platforms.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
