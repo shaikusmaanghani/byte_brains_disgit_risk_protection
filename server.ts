@@ -1,11 +1,24 @@
-import express from 'express';
+ import 'dotenv/config';
+  import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/api';
 import path from 'path';
+import mongoose from 'mongoose';
 
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  // Connect to the Sentinel Shield database
+    const databaseUrl = process.env.MONGODB_URI 
+
+  if (!databaseUrl) {
+    console.error("❌ MONGODB_URI is missing from your .env file!");
+  } else {
+    mongoose.connect(databaseUrl)
+      .then(() => console.log("🎉 SUCCESS! Safely connected to Sentinel Shield DB."))
+      .catch(err => console.error("❌ Database connection error:", err));
+  }
+
 
   // JSON and URL-encoded body parsers
   app.use(express.json({ limit: '10mb' }));
