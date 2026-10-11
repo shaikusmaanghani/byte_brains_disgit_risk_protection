@@ -1,14 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import {
+import type {
   BrandProfile,
   Finding,
   MonitoringSource,
   WatchlistRule,
   User,
   SystemHealthReport,
-} from '../src/types';
-import { analyzeMobileApp, analyzeSocialCandidate } from '../src/services/detectionEngine';
+} from '../src/types/index.js';
+import { analyzeMobileApp, analyzeSocialCandidate } from '../src/services/detectionEngine.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'sentinel_db.json');

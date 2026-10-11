@@ -7,7 +7,7 @@
  * publisher verification, package ID analysis, and weighted evidence-based scoring.
  */
 
-import {
+import type {
   BrandProfile,
   AppCandidateInput,
   SocialCandidateInput,
@@ -17,8 +17,7 @@ import {
   OfficialSocialAccount,
   RiskLevel,
   ThreatClassification,
-} from '../types';
-
+} from '../types/index.js';
 // Homoglyphs mapping: Cyrillic / Greek / visual confusable characters to Latin base
 export const HOMOGLYPH_MAP: Record<string, string> = {
   // Cyrillic small look-alikes

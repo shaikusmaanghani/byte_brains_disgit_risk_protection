@@ -1,15 +1,16 @@
-   import express from 'express';
-   import mongoose from 'mongoose';
-   import { apiRouter } from '../server/api.js';
-   const app = express();
-   app.use(express.json({ limit: '10mb' }));
-   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+import express from 'express';
+import mongoose from 'mongoose';
+import { apiRouter } from '../server/api.js';
 
-   const uri = process.env.MONGODB_URI;
-   if (uri && mongoose.connection.readyState === 0) {
-     mongoose.connect(uri).catch((err) => console.error('DB error:', err));
-   }
+const app = express();
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
-   app.use('/api', apiRouter);
+const uri = process.env.MONGODB_URI;
+if (uri && mongoose.connection.readyState === 0) {
+  mongoose.connect(uri).catch((err) => console.error('MongoDB connection error:', err));
+}
 
-   export default app;
+app.use('/api', apiRouter);
+
+export default app;
