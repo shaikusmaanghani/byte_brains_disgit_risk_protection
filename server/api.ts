@@ -1,17 +1,17 @@
-import { Router, Request, Response } from 'express';
-import { db } from './db';
+import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { db } from './db.js';
 import {
   analyzeMobileApp,
   analyzeSocialCandidate,
-} from '../src/services/detectionEngine';
-import {
+} from '../src/services/detectionEngine.js';
+import type {
   AppCandidateInput,
   SocialCandidateInput,
   Finding,
   ThreatGraphNode,
   ThreatGraphLink,
-} from '../src/types';
-
+} from '../src/types/index.js';
 export const apiRouter = Router();
 
 // Middleware: Basic request logger & header check
