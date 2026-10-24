@@ -110,6 +110,22 @@ const report = draftTakedownReport(confirmed, 'Analyst One');
 assert.match(report, /observed/i);
 assert.match(report, /Signals not found/i);
 assertSafeReportWording(report);
+const measuredLogoReport = draftTakedownReport({
+  ...confirmed,
+  logoComparison: {
+    similarity: 92,
+    method: 'pHash+dHash+color histogram',
+    pHashDistance: 4,
+    dHashDistance: 3,
+    colorHistogramSimilarity: 95,
+  },
+  logoMatchThreshold: 80,
+  signals: confirmed.signals.filter((signal) => signal.type !== 'logo_similarity'),
+}, 'Analyst One');
+assert.match(measuredLogoReport, /appears visually similar at 92%/i);
+assert.match(measuredLogoReport, /pHash distance 4, dHash distance 3/);
+assert.match(measuredLogoReport, /pHash\+dHash\+color histogram/);
+assertSafeReportWording(measuredLogoReport);
 assert.throws(() => assertSafeReportWording('This is confirmed fraud.'), /unsupported/i);
 assert.throws(
   () => draftTakedownReport({ ...confirmed, status: 'new', investigationStatus: 'New' }, 'Analyst One'),

@@ -140,16 +140,39 @@ Scoring weights and severity thresholds are defined in `src/services/scoringConf
 | Publisher mismatch | 20 | Publisher not in the registered publisher list |
 | Developer mismatch | 15 | Applied separately when publisher and developer differ |
 | Description overlap | 15 | Token Jaccard and registered brand terms |
-| Logo dHash resemblance | 10 | Hamming distance between supplied 64-bit hexadecimal dHashes |
+| Logo resemblance | 10 | Fetched-image pHash + dHash Hamming distances and dominant-color histogram; unavailable images are skipped |
 | Package mismatch | 5 | Non-official app package identifier |
 | Non-official domain | 5 | Candidate link is not in the official-domain allowlist |
 | Suspicious language / permissions | 5 | Login, urgent verification, giveaway, rewards, sensitive permissions |
 | Homoglyph substitution | 15 | Confusable Unicode and common character substitutions |
 | Recent creation | 5 | Candidate creation date within 14 days |
 
-Severity: Critical ≥85, High ≥75, Medium ≥50, Low ≥20, Informational <20. `HIGH_THRESHOLD` defaults to 75. Logo similarity is skipped and explained if the ingestion source has not supplied a 64-bit logo hash. Scoring never claims a pHash result from a URL alone.
+Severity: Critical ≥85, High ≥75, Medium ≥50, Low ≥20, Informational <20. `HIGH_THRESHOLD` defaults to 75. `LOGO_MATCH_THRESHOLD` defaults to 80%. Candidate images are fetched with public-IP, HTTP(S)-only, redirect, content-type, five-second timeout, and 2 MB size guards. Official image hashes are cached in MongoDB. The score explanation records similarity, pHash and dHash distances, histogram similarity, and method. A missing or unsafe image is explicitly recorded as “Logo not available” and does not penalize the candidate.
 
 `npm run seed` loads the 24 clearly labelled simulated detections from the existing Round 1 JSON dataset into MongoDB, including a near-copy app, social lookalikes, a harmless fan page, a homoglyph domain, and copied description under a different publisher. The official-asset allowlist is stored alongside the brand profile. Re-running is idempotent by detection ID. Seed records are demonstration data, not live intelligence.
+
+## Live Brand Threat Radar
+
+The dashboard reads its protected brand name, official domains, logo, and allowlist from MongoDB (currently the stored profile is **Acme Financial**). On dashboard open it requests a scan, then refreshes the MongoDB-backed radar summary every 15 seconds while the tab is visible. The authenticated `GET /api/radar/summary` response is produced by one MongoDB aggregation pipeline and cached for at most 10 seconds; False Positive, Closed, and allowlisted official assets are excluded. Counts distinguish suspected/unconfirmed records from analyst-confirmed records.
+
+`POST /api/radar/scan` starts a bounded scan when the MongoDB lock is free and `SCAN_COOLDOWN_MINUTES` (default 10) has elapsed. Concurrent visits share the scan lock. Vercel Cron calls `GET /api/radar/scan` every 15 minutes and requires `CRON_SECRET` as a bearer token. Configure the secret in the deployment environment; do not commit its value.
+The dashboard’s manual **Run Surface Scan** action and compatibility endpoint `POST /api/monitoring/run` use this same live scanner; they do not add synthetic candidates. Demo seed records remain visibly labeled.
+
+| Source | Radar behavior |
+|---|---|
+| Lookalike domains | Generates a bounded set of typo variants from stored official domains, checks public DNS, queries Certificate Transparency (`crt.sh`), then inspects live pages and their title, description, favicon, and Open Graph image. |
+| Apple App Store | Uses the public iTunes Search API for the stored brand name and scores returned app metadata/icons. |
+| Google Play | Explicitly reports `skipped`; no fabricated results are presented when a supported search connector is unavailable. |
+| Social platforms | Existing seed/ingest rows are labeled **Demo data**. X/Meta/LinkedIn are connector placeholders and report `skipped` even when optional credentials (`X_BEARER_TOKEN`, `META_ACCESS_TOKEN`, `LINKEDIN_ACCESS_TOKEN`) are present; they are not claimed live integrations. |
+
+Live domain and app-store results are stored through the existing platform+identifier upsert and scoring/alert flow. Official accounts/apps/domains are excluded before ingest and in summary aggregation. `LOGO_MATCH_THRESHOLD` controls the matching-logo count and badge. A logo is marked as matching only at or above that threshold; measured values remain visible in detection evidence and confirmed-only takedown drafts.
+
+### 30-second radar demo
+
+1. Open the dashboard and watch the scan indicator, source states, and live suspected/confirmed counts.
+2. Open a top-five detection and compare its candidate logo with the official logo; inspect the measured score and pHash/dHash evidence.
+3. Confirm a suspected record and observe the confirmed count update; mark another False Positive and observe the suspected count drop.
+4. Ask the analyst chatbot: “How many fake profiles are there for Acme Financial Bank?” It responds with the stored brand’s suspected/confirmed split, logo-match count, latest scan time, and detection IDs.
 
 ### Screenshot / GIF checklist
 

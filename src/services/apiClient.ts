@@ -12,6 +12,7 @@ import {
   SystemHealthReport,
   ThreatGraphNode,
   ThreatGraphLink,
+  RadarSummary,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -146,6 +147,18 @@ export const apiClient = {
     return (await res.json()).answer;
   },
 
+  async getRadarSummary(): Promise<RadarSummary> {
+    const res = await apiFetch(`${BASE_URL}/radar/summary`);
+    if (!res.ok) throw new Error('Failed to fetch Brand Threat Radar summary');
+    return res.json();
+  },
+
+  async runRadarScan(): Promise<{ started: boolean; scan_in_progress: boolean; last_scan_at: string | null; summary: RadarSummary }> {
+    const res = await apiFetch(`${BASE_URL}/radar/scan`, { method: 'POST' });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed to start Brand Threat Radar scan');
+    return res.json();
+  },
+
   async deleteFinding(id: string): Promise<void> {
     const res = await apiFetch(`${BASE_URL}/findings/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete finding');
@@ -184,12 +197,11 @@ export const apiClient = {
 
   // Monitoring
   async runMonitoringScan(): Promise<{
-    success: boolean;
-    message: string;
-    scannedSources: number;
-    threatsIdentified: number;
-    lastScanTime: string;
-    totalScansCount: number;
+    started: boolean;
+    scan_in_progress: boolean;
+    last_scan_at: string | null;
+    sources_checked: RadarSummary['sources_checked'];
+    summary: RadarSummary;
   }> {
     const res = await apiFetch(`${BASE_URL}/monitoring/run`, {
       method: 'POST',

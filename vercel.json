@@ -2,6 +2,9 @@
      "framework": "vite",
      "buildCommand": "npm run vercel-build",
      "outputDirectory": "dist",
+     "crons": [
+       { "path": "/api/radar/scan", "schedule": "*/15 * * * *" }
+     ],
      "rewrites": [
        { "source": "/api/(.*)", "destination": "/api" },
        { "source": "/((?!api/).*)", "destination": "/index.html" }

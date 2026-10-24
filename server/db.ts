@@ -50,6 +50,7 @@ function hydrateFinding(finding: Finding, brand: BrandProfile): Finding {
   }, {});
   return {
     ...finding,
+    brandName: finding.brandName || brand.name,
     investigationStatus: finding.investigationStatus || investigationStatus(finding),
     scoreBreakdown,
     score_breakdown: scoreBreakdown,
@@ -61,11 +62,14 @@ function hydrateFinding(finding: Finding, brand: BrandProfile): Finding {
       note: finding.isSimulated ? 'Clearly labelled simulated demonstration record.' : 'Imported from the existing Round 1 finding store.',
     }],
     isOfficialAsset: finding.isOfficialAsset || false,
-    source: finding.source || {
-      platform: finding.platform,
-      url: finding.url,
-      identifier: finding.identifier,
-      discovered_at: firstSeen,
+    source: {
+      ...(finding.source || {
+        platform: finding.platform,
+        url: finding.url,
+        identifier: finding.identifier,
+        discovered_at: firstSeen,
+      }),
+      ...(finding.isSimulated ? { name: 'demo', kind: 'demo' as const } : {}),
     },
     suspectedAsset: finding.suspectedAsset || {
       type: finding.assetType === 'mobile_application' ? 'app' : 'profile',
@@ -82,7 +86,10 @@ function hydrateFinding(finding: Finding, brand: BrandProfile): Finding {
       points_contributed: signal.pointsContributed ?? signal.score,
       reason: signal.reason || signal.explanation,
     })),
-    officialAssetDetails: finding.officialAssetDetails || {
+    officialAssetDetails: finding.officialAssetDetails ? {
+      ...finding.officialAssetDetails,
+      domains: finding.officialAssetDetails.domains || brand.officialDomains,
+    } : {
       name: officialName,
       publisherOrDeveloper: official && 'publisher' in official
         ? official.publisher
@@ -95,7 +102,9 @@ function hydrateFinding(finding: Finding, brand: BrandProfile): Finding {
         : official && 'avatarUrl' in official
           ? official.avatarUrl || brand.logoUrl
           : brand.logoUrl,
+      domains: brand.officialDomains,
     },
+    logoMatchThreshold: finding.logoMatchThreshold || Number(process.env.LOGO_MATCH_THRESHOLD || 80),
   };
 }
 

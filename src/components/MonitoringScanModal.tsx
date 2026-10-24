@@ -24,14 +24,15 @@ export const MonitoringScanModal: React.FC<MonitoringScanModalProps> = ({
 }) => {
   const [stepIndex, setStepIndex] = useState(0);
   const [isDone, setIsDone] = useState(false);
-  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanResult, setScanResult] = useState<Awaited<ReturnType<typeof apiClient.runMonitoringScan>> | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const steps = [
-    { label: 'Collecting sources...', detail: 'Querying Google Play, App Store, X/Twitter, Instagram & LinkedIn crawler feeds' },
-    { label: 'Normalizing records...', detail: 'Stripping Unicode confusable characters, homoglyphs, and punctuation noise' },
-    { label: 'Comparing brand identity...', detail: 'Evaluating candidate names against Acme Financial whitelist and aliases' },
-    { label: 'Running detection engine...', detail: 'Calculating Damerau-Levenshtein metrics, publisher mismatch, and lure vectors' },
-    { label: 'Prioritizing threats...', detail: 'Synthesizing weighted risk scores and generating explainable analyst evidence' },
+    { label: 'Checking source adapters...', detail: 'Querying the configured live domain and app-store sources' },
+    { label: 'Validating candidates...', detail: 'Excluding allowlisted official brand assets' },
+    { label: 'Comparing brand identity...', detail: 'Scoring names, descriptions, publishers, and available logos' },
+    { label: 'Updating findings...', detail: 'Upserting records and deduplicating alerts' },
+    { label: 'Refreshing radar...', detail: 'Aggregating current counts and source statuses from MongoDB' },
   ];
 
   useEffect(() => {
@@ -39,31 +40,33 @@ export const MonitoringScanModal: React.FC<MonitoringScanModalProps> = ({
       setStepIndex(0);
       setIsDone(false);
       setScanResult(null);
+      setScanError(null);
       return;
     }
 
-    let current = 0;
+    let cancelled = false;
     const interval = setInterval(() => {
-      current++;
-      if (current < steps.length) {
-        setStepIndex(current);
-      } else {
-        clearInterval(interval);
-        // Call the real backend endpoint
-        apiClient.runMonitoringScan()
-          .then((res) => {
-            setScanResult(res);
-            setIsDone(true);
-            onScanCompleted();
-          })
-          .catch((err) => {
-            console.error('Scan failed:', err);
-            setIsDone(true);
-          });
-      }
-    }, 700);
+      setStepIndex((current) => Math.min(current + 1, steps.length - 1));
+    }, 500);
+    apiClient.runMonitoringScan()
+      .then((res) => {
+        if (cancelled) return;
+        setScanResult(res);
+        setStepIndex(steps.length - 1);
+        setIsDone(true);
+        onScanCompleted();
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error('Scan failed:', err);
+        setScanError(err instanceof Error ? err.message : 'The live scan failed.');
+        setIsDone(true);
+      });
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -79,7 +82,7 @@ export const MonitoringScanModal: React.FC<MonitoringScanModalProps> = ({
             <div>
               <h3 className="text-sm font-bold text-white">Monitoring Scan Pipeline</h3>
               <p className="text-[11px] text-slate-400 font-mono">
-                SIMULATED SURVEILLANCE RUNNER
+                LIVE SOURCE CHECK
               </p>
             </div>
           </div>
@@ -96,7 +99,7 @@ export const MonitoringScanModal: React.FC<MonitoringScanModalProps> = ({
         {/* Step Progression List */}
         <div className="space-y-3">
           {steps.map((st, idx) => {
-            const isFinished = idx < stepIndex || isDone;
+            const isFinished = idx < stepIndex || (isDone && !scanError);
             const isCurrent = idx === stepIndex && !isDone;
 
             return (
@@ -133,25 +136,42 @@ export const MonitoringScanModal: React.FC<MonitoringScanModalProps> = ({
           })}
         </div>
 
+        {scanError && (
+          <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-xs text-rose-200">
+            <p className="font-semibold">Live scan failed</p>
+            <p className="mt-1">{scanError}</p>
+          </div>
+        )}
+
         {/* Completion Result Card */}
-        {isDone && (
+        {isDone && scanResult && (
           <div className="p-4 rounded-xl bg-slate-950 border border-cyan-500/40 space-y-3">
             <div className="flex items-center justify-between text-xs font-semibold text-cyan-300">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                Scan Completed Successfully
+                {scanResult.started ? 'Live scan completed' : scanResult.scan_in_progress ? 'Live scan already running' : 'Scan cooldown active'}
               </span>
               <span className="font-mono text-slate-400 text-[11px]">
-                {scanResult?.scannedSources || 7} Sources Scanned
+                {scanResult.summary.sources_checked.length} sources checked
               </span>
             </div>
             <p className="text-xs text-slate-300">
-              New impersonation candidates and publisher mismatch anomalies were evaluated by the SentinelShield detection engine and appended to Threat Findings.
+              Radar currently tracks {scanResult.summary.total_suspected} suspected and {scanResult.summary.confirmed_fake} confirmed detections. These counts exclude official, false-positive, and closed records.
             </p>
             <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80 pt-2 font-mono">
-              <span>Evaluated in 3.4s</span>
-              <span className="text-amber-400">SIMULATED DATASET UPDATED</span>
+              <span>Last scan: {scanResult.last_scan_at ? new Date(scanResult.last_scan_at).toLocaleString() : 'not recorded'}</span>
+              <span className={scanResult.started ? 'text-emerald-400' : 'text-amber-400'}>
+                {scanResult.started ? 'LIVE DATA' : 'NO NEW SCAN STARTED'}
+              </span>
             </div>
+            <ul className="space-y-1 border-t border-slate-800/80 pt-2 text-[10px]">
+              {scanResult.summary.sources_checked.map((source) => (
+                <li key={source.name} className="flex justify-between gap-3">
+                  <span className="truncate text-slate-400">{source.name}{source.detail ? ` · ${source.detail}` : ''}</span>
+                  <span className={source.status === 'ok' ? 'shrink-0 text-emerald-400' : source.status === 'failed' ? 'shrink-0 text-rose-400' : 'shrink-0 text-slate-500'}>{source.status}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -161,11 +181,11 @@ export const MonitoringScanModal: React.FC<MonitoringScanModalProps> = ({
               onClick={onClose}
               className="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs transition-colors"
             >
-              View Findings
+              {scanError ? 'Close' : 'View Findings'}
             </button>
           ) : (
             <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
-              <span>Processing detection tensors...</span>
+              <span>Contacting live source adapters...</span>
             </div>
           )}
         </div>

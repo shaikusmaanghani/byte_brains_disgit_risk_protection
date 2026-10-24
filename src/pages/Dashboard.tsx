@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { Finding, BrandProfile } from '../types';
 import { RadarChart } from '../components/RadarChart';
+import { BrandThreatRadar } from '../components/BrandThreatRadar';
 
 interface DashboardProps {
   overview: any;
@@ -63,6 +64,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <BrandThreatRadar brand={brand} onSelectFinding={onSelectFinding} />
+
       {/* Prominent Global Threat Level Banner */}
       <div
         className={`p-5 rounded-2xl border bg-gradient-to-r ${threatLevelColors[currentLevel as keyof typeof threatLevelColors]} shadow-lg relative overflow-hidden`}
@@ -85,7 +88,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Targeted brand spoofing detected against <strong className="text-white">{brand.name}</strong> on Google Play Store and X/Twitter. Multiple rogue app publishers mimicking banking credentials with publisher mismatch.
+              Current review priority for <strong className="text-white">{brand.name}</strong>, based on recorded detections and analyst decisions. Unconfirmed records remain suspected until reviewed.
             </p>
           </div>
 

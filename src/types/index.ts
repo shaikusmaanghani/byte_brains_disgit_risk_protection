@@ -134,6 +134,8 @@ export interface AppCandidateInput {
   website?: string;
   createdAt?: string;
   logoHash?: string;
+  logoComparison?: LogoComparison;
+  logoUnavailableReason?: string;
 }
 
 export interface SocialCandidateInput {
@@ -149,6 +151,17 @@ export interface SocialCandidateInput {
   keywords?: string[];
   createdAt?: string;
   avatarHash?: string;
+  logoComparison?: LogoComparison;
+  logoUnavailableReason?: string;
+  logoUrl?: string;
+}
+
+export interface LogoComparison {
+  similarity: number;
+  method: 'pHash+dHash+color histogram';
+  pHashDistance: number;
+  dHashDistance: number;
+  colorHistogramSimilarity: number;
 }
 
 export interface AnalysisResult {
@@ -186,6 +199,7 @@ export interface InvestigationNote {
 export interface Finding {
   id: string;
   brandId: string;
+  brandName?: string;
   assetType: AssetType;
   platform: PlatformType;
   candidateName: string;
@@ -220,6 +234,8 @@ export interface Finding {
     url: string;
     identifier: string;
     discovered_at: string;
+    name?: string;
+    kind?: 'live' | 'demo';
   };
   suspectedAsset?: {
     type: 'profile' | 'page' | 'app';
@@ -244,7 +260,10 @@ export interface Finding {
     publisherOrDeveloper?: string;
     description?: string;
     logoRef?: string;
+    domains?: string[];
   };
+  logoComparison?: LogoComparison;
+  logoMatchThreshold?: number;
 }
 
 export type InvestigationStatus = 'New' | 'Under Review' | 'Confirmed' | 'False Positive' | 'Closed';
@@ -267,6 +286,33 @@ export interface DetectionAlert {
   createdAt: string;
   read: boolean;
   escalated: boolean;
+}
+
+export interface RadarSummary {
+  total_suspected: number;
+  confirmed_fake: number;
+  by_platform: Record<string, number>;
+  by_severity: Record<string, number>;
+  by_status: Record<string, number>;
+  new_last_hour: number;
+  new_last_24h: number;
+  logo_matches: number;
+  logo_match_threshold: number;
+  top_5_highest_risk: Array<{
+    id: string;
+    name: string;
+    platform: string;
+    score: number;
+    logo_similarity: number | null;
+    logo_url: string | null;
+    demo_data: boolean;
+    status: string;
+  }>;
+  recent_new_ids: string[];
+  last_scan_at: string | null;
+  next_scan_at: string | null;
+  scan_in_progress: boolean;
+  sources_checked: Array<{ name: string; status: 'ok' | 'skipped' | 'failed'; detail: string }>;
 }
 
 export interface MonitoringSource {

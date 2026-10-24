@@ -121,7 +121,7 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
               </span>
               {finding.isSimulated && (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  SIMULATED THREAT RECORD
+                  DEMO DATA
                 </span>
               )}
             </div>
@@ -284,7 +284,22 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                       </p>
                     </div>
                   )}
-                  {finding.iconUrl && <img src={finding.iconUrl} alt={`${finding.candidateName} logo`} className="h-12 w-12 rounded border border-slate-700 object-cover" />}
+                  <div className="flex items-center gap-3 border-t border-slate-800 pt-3">
+                    {finding.iconUrl ? (
+                      <img src={finding.iconUrl} alt={`${finding.candidateName} logo`} className="h-14 w-14 rounded-lg border border-rose-500/30 bg-slate-900 object-cover" />
+                    ) : <div className="grid h-14 w-14 place-items-center rounded-lg border border-slate-700 text-[9px] text-slate-500">No logo</div>}
+                    <div className="text-[11px] text-slate-400">
+                      <div className="font-semibold text-slate-200">Observed candidate logo</div>
+                      {finding.logoComparison
+                        ? <div>{finding.logoComparison.similarity}% visual similarity</div>
+                        : <div>Logo not available; comparison skipped.</div>}
+                      {finding.logoComparison && finding.logoComparison.similarity >= (finding.logoMatchThreshold || 80) && (
+                        <span className="mt-1 inline-flex rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-200">
+                          Logo match
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -302,7 +317,7 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                   <div>
                     <span className="text-slate-400 block text-[11px]">Official App / Brand Name:</span>
                     <span className="font-semibold text-white font-mono">
-                      {officialDetails?.name || (matchedApp ? matchedApp.appName : 'Acme Financial')}
+                      {officialDetails?.name || finding.imitates?.official_asset_name || matchedApp?.appName || 'Registered brand asset'}
                     </span>
                   </div>
                   <div>
@@ -314,16 +329,21 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                   <div>
                     <span className="text-slate-400 block text-[11px]">Legitimate Package ID:</span>
                     <span className="font-semibold text-emerald-300 font-mono">
-                      {matchedApp ? matchedApp.packageId : 'com.acme.mobilebanking'}
+                      {matchedApp?.packageId || 'Not registered'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Authorized Domains:</span>
                     <span className="font-semibold text-emerald-300 font-mono">
-                      acmefinancial.com, acmebank.com
+                      {officialDetails?.domains?.join(', ') || 'Not registered'}
                     </span>
                   </div>
-                  {officialDetails?.logoRef && <img src={officialDetails.logoRef} alt="Official brand logo" className="h-12 w-12 rounded border border-emerald-700 object-cover" />}
+                  <div className="flex items-center gap-3 border-t border-slate-800 pt-3">
+                    {officialDetails?.logoRef ? (
+                      <img src={officialDetails.logoRef} alt="Official brand logo" className="h-14 w-14 rounded-lg border border-emerald-700 bg-slate-900 object-cover" />
+                    ) : <div className="grid h-14 w-14 place-items-center rounded-lg border border-slate-700 text-[9px] text-slate-500">No logo</div>}
+                    <div className="text-[11px] font-semibold text-emerald-200">Registered official logo reference</div>
+                  </div>
                   {officialDetails?.description && (
                     <div>
                       <span className="text-slate-400 block text-[11px]">Registered description:</span>

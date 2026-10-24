@@ -18,7 +18,7 @@ import type {
   RiskLevel,
   ThreatClassification,
 } from '../types/index.js';
-import { MAX_RISK_SCORE, SCORING_WEIGHTS, SEVERITY_THRESHOLDS } from './scoringConfig.js';
+import { LOGO_MATCH_THRESHOLD, MAX_RISK_SCORE, SCORING_WEIGHTS, SEVERITY_THRESHOLDS } from './scoringConfig.js';
 // Homoglyphs mapping: Cyrillic / Greek / visual confusable characters to Latin base
 export const HOMOGLYPH_MAP: Record<string, string> = {
   // Cyrillic small look-alikes
@@ -94,6 +94,22 @@ function evidenceWithContributions(signals: DetectionSignal[]): DetectionSignal[
     pointsContributed: signal.pointsContributed ?? signal.score,
     reason: signal.reason || signal.explanation,
   }));
+}
+
+function logoReason(similarity: number, distance: number | null, comparison?: {
+  pHashDistance: number;
+  dHashDistance: number;
+  colorHistogramSimilarity: number;
+  method: string;
+}): string {
+  const percentage = Math.round(similarity * 100);
+  if (comparison) {
+    const description = percentage >= LOGO_MATCH_THRESHOLD
+      ? `Logo is ${percentage}% visually similar to the official logo`
+      : `Logo comparison measured ${percentage}% similarity, below the ${LOGO_MATCH_THRESHOLD}% match threshold`;
+    return `${description} (pHash distance ${comparison.pHashDistance}, dHash distance ${comparison.dHashDistance}, color histogram ${comparison.colorHistogramSimilarity}% similar; measured by ${comparison.method}).`;
+  }
+  return `Candidate logo dHash differs from the registered official logo by ${distance} of 64 bits (${percentage}% similarity).`;
 }
 
 /**
@@ -604,17 +620,17 @@ export function analyzeMobileApp(
   let logoSimilarityScore = 0;
   const officialLogoHash = bestMatchedApp?.logoHash || brand.logoHash;
   const logoDistance = perceptualHashDistance(candidate.logoHash, officialLogoHash);
-  const logoSim = computeLogoSimilarity(candidate.logoHash, officialLogoHash);
-  if (logoSim >= 0.75 && nameSimilarityScore >= 12) {
-    logoSimilarityScore = SCORING_WEIGHTS.logoSimilarity;
+  const logoSim = candidate.logoComparison
+    ? Math.max(0, Math.min(100, candidate.logoComparison.similarity)) / 100
+    : computeLogoSimilarity(candidate.logoHash, officialLogoHash);
+  if (logoSim > 0 || candidate.logoComparison) {
+    logoSimilarityScore = Math.round(SCORING_WEIGHTS.logoSimilarity * logoSim);
     signals.push({
       type: 'logo_similarity',
-      score: SCORING_WEIGHTS.logoSimilarity,
+      score: logoSimilarityScore,
       weight: SCORING_WEIGHTS.logoSimilarity,
-      explanation: `Application icon dHash differs from the registered official logo by ${logoDistance} of 64 bits (${Math.round(logoSim * 100)}% similarity).`,
+      explanation: logoReason(logoSim, logoDistance, candidate.logoComparison),
     });
-  } else if (logoSim >= 0.5) {
-    logoSimilarityScore = Math.round(SCORING_WEIGHTS.logoSimilarity * 0.5);
   }
 
   // Signal F: Package ID Mismatch (0 - 5)
@@ -689,12 +705,12 @@ export function analyzeMobileApp(
     });
   }
 
-  if (logoDistance === null) {
+  if (logoDistance === null && !candidate.logoComparison) {
     signals.push({
       type: 'logo_comparison_skipped',
       score: 0,
       weight: SCORING_WEIGHTS.logoSimilarity,
-      explanation: 'Logo comparison skipped because a candidate or official 64-bit logo hash is unavailable.',
+      explanation: candidate.logoUnavailableReason || 'Logo not available; comparison skipped because a candidate or official logo image is unavailable.',
     });
   }
 
@@ -982,25 +998,25 @@ export function analyzeSocialCandidate(
   let logoScore = 0;
   const officialSocialLogoHash = officialOnPlatform?.avatarHash || brand.logoHash;
   const socialLogoDistance = perceptualHashDistance(candidate.avatarHash, officialSocialLogoHash);
-  if (socialLogoDistance !== null && (brandInHandle || nameSimScore >= 10)) {
-    const sim = computeLogoSimilarity(candidate.avatarHash, officialSocialLogoHash);
-    if (sim >= 0.7) {
-      logoScore = SCORING_WEIGHTS.logoSimilarity;
-      signals.push({
-        type: 'logo_similarity',
-        score: SCORING_WEIGHTS.logoSimilarity,
-        weight: SCORING_WEIGHTS.logoSimilarity,
-        explanation: `Profile avatar dHash differs from the registered official logo by ${socialLogoDistance} of 64 bits (${Math.round(sim * 100)}% similarity).`,
-      });
-    }
+  const socialLogoSimilarity = candidate.logoComparison
+    ? Math.max(0, Math.min(100, candidate.logoComparison.similarity)) / 100
+    : computeLogoSimilarity(candidate.avatarHash, officialSocialLogoHash);
+  if (socialLogoSimilarity > 0 || candidate.logoComparison) {
+    logoScore = Math.round(SCORING_WEIGHTS.logoSimilarity * socialLogoSimilarity);
+    signals.push({
+      type: 'logo_similarity',
+      score: logoScore,
+      weight: SCORING_WEIGHTS.logoSimilarity,
+      explanation: logoReason(socialLogoSimilarity, socialLogoDistance, candidate.logoComparison),
+    });
   }
 
-  if (socialLogoDistance === null) {
+  if (socialLogoDistance === null && !candidate.logoComparison) {
     signals.push({
       type: 'logo_comparison_skipped',
       score: 0,
       weight: SCORING_WEIGHTS.logoSimilarity,
-      explanation: 'Logo comparison skipped because a candidate or official 64-bit logo hash is unavailable.',
+      explanation: candidate.logoUnavailableReason || 'Logo not available; comparison skipped because a candidate or official logo image is unavailable.',
     });
   }
 

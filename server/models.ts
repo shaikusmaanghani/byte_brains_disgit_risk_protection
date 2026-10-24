@@ -86,12 +86,19 @@ const sessionSchema = new Schema({
   expiresAt: { type: Date, required: true, index: { expires: 0 } },
 }, { strict: false, versionKey: false, minimize: false });
 
+const radarLockSchema = new Schema({
+  _id: { type: String, required: true },
+  owner: { type: String, required: true },
+  expiresAt: { type: Date, required: true },
+}, { versionKey: false });
+
 export const UserModel = models.User || model('User', userSchema);
 export const DetectionModel = models.Detection || model('Detection', detectionSchema);
 export const AlertModel = models.Alert || model('Alert', alertSchema);
 export const ReportModel = models.Report || model('Report', reportSchema);
 export const AppStateModel = models.AppState || model('AppState', appStateSchema);
 export const SessionModel = models.Session || model('Session', sessionSchema);
+export const RadarLockModel = models.RadarLock || model('RadarLock', radarLockSchema);
 
 let connectionPromise: Promise<void> | undefined;
 export async function connectMongo(uri = process.env.MONGODB_URI): Promise<void> {
@@ -115,6 +122,7 @@ export async function connectMongo(uri = process.env.MONGODB_URI): Promise<void>
     ReportModel.init(),
     AppStateModel.init(),
     SessionModel.init(),
+    RadarLockModel.init(),
   ]);
 }
 

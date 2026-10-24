@@ -3,26 +3,25 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-   
   "scripts": {
     "dev": "tsx server.ts --dev",
     "build": "vite build",
     "vercel-build": "vite build",
     "start": "tsx server.ts",
     "preview": "vite preview",
-    "test": "tsx tests/detection.test.ts && tsx tests/round2.test.ts && tsx tests/mongoPersistence.test.ts",
+    "test": "tsx tests/detection.test.ts && tsx tests/round2.test.ts && tsx tests/mongoPersistence.test.ts && tsx tests/radar.test.ts",
     "seed": "tsx scripts/seed.ts",
     "import:json": "tsx scripts/importJson.ts",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true }); require('fs').rmSync('server.js', { force: true })\"",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "jimp": "^1.6.1",
     "lucide-react": "^0.546.0",
     "mongoose": "^9.11.1",
     "motion": "^12.23.24",

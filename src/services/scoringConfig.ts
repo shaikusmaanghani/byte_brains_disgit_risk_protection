@@ -33,6 +33,9 @@ const runtime = globalThis as typeof globalThis & {
 export const HIGH_THRESHOLD = Number(
   runtime.process?.env?.HIGH_THRESHOLD || import.meta.env?.VITE_HIGH_THRESHOLD || 75,
 );
+export const LOGO_MATCH_THRESHOLD = Number(
+  runtime.process?.env?.LOGO_MATCH_THRESHOLD || import.meta.env?.VITE_LOGO_MATCH_THRESHOLD || 80,
+);
 
 export function severityForScore(score: number): 'critical' | 'high' | 'medium' | 'low' | 'informational' {
   if (score >= SEVERITY_THRESHOLDS.critical) return 'critical';

@@ -10,6 +10,13 @@ export function draftTakedownReport(finding: Finding, actor: string): string {
     .filter((signal) => signal.score > 0)
     .map((signal) => `- ${signal.type.replace(/_/g, ' ')}: ${signal.score} points (weight ${signal.weight}). ${signal.explanation}`)
     .join('\n') || '- No positive scoring evidence was recorded.';
+  const hasLogoEvidence = (finding.signals || []).some((signal) => signal.type === 'logo_similarity' && signal.score > 0);
+  const logoThreshold = finding.logoMatchThreshold || 80;
+  const logoEvidence = finding.logoComparison && !hasLogoEvidence
+    ? `- Logo similarity: 0 points. ${finding.logoComparison.similarity >= logoThreshold
+      ? `The candidate logo appears visually similar at ${finding.logoComparison.similarity}%`
+      : `Observed logo similarity was ${finding.logoComparison.similarity}%, below the ${logoThreshold}% match threshold`}; pHash distance ${finding.logoComparison.pHashDistance}, dHash distance ${finding.logoComparison.dHashDistance}, color histogram similarity ${finding.logoComparison.colorHistogramSimilarity}%, method ${finding.logoComparison.method}.`
+    : '';
   const foundSignals = new Set((finding.signals || []).filter((signal) => signal.score > 0).map((signal) => signal.type));
   const expectedSignals = ['name_similarity', 'description_similarity', 'publisher_mismatch', 'domain_mismatch', 'logo_similarity'];
   const notFound = expectedSignals
@@ -27,7 +34,7 @@ export function draftTakedownReport(finding: Finding, actor: string): string {
     `# Platform review request — ${finding.id}`,
     '',
     '## Summary',
-    `Observed indicators are consistent with an asset that appears to use identifiers associated with ${finding.brandId}. This request is based only on the evidence recorded below.`,
+    `Observed indicators are consistent with an asset that appears to use identifiers associated with ${finding.brandName || 'the protected brand'}. This request is based only on the evidence recorded below.`,
     '',
     '## Official brand asset',
     `- Asset: ${officialName}`,
@@ -40,7 +47,7 @@ export function draftTakedownReport(finding: Finding, actor: string): string {
     `- URL: ${finding.url}`,
     '',
     '## Observed similarities and measured evidence',
-    evidence,
+    [evidence, logoEvidence].filter(Boolean).join('\n'),
     '',
     '## Publisher difference',
     `- Observed publisher/developer: ${finding.publisherOrDeveloper || 'not available'}`,

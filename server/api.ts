@@ -16,6 +16,8 @@ import { answerAnalystQuestion, getDetection } from '../src/services/analystAssi
 import { draftTakedownReport } from '../src/services/takedownReport.js';
 import { appendHistory, transitionFinding } from '../src/services/investigation.js';
 import { AuthenticatedRequest, createDemoSession, requireSession, revokeSession } from './auth.js';
+import { timingSafeEqual } from 'node:crypto';
+import { getRadarSummary, invalidateRadarSummaryCache, runRadarScan } from './radar.js';
 export const apiRouter = Router();
 
 // Middleware: Basic request logger & header check
@@ -62,7 +64,34 @@ apiRouter.post('/auth/logout', requireSession, async (req: Request, res: Respons
   res.json({ success: true });
 });
 
+apiRouter.get('/radar/scan', async (req: Request, res: Response) => {
+  const secret = process.env.CRON_SECRET;
+  const authorization = req.header('authorization') || '';
+  const expected = secret ? `Bearer ${secret}` : '';
+  if (!secret || Buffer.byteLength(authorization) !== Buffer.byteLength(expected) ||
+    !timingSafeEqual(Buffer.from(authorization), Buffer.from(expected))) {
+    res.status(secret ? 401 : 503).json({ error: secret ? 'Invalid cron authorization.' : 'CRON_SECRET is not configured.' });
+    return;
+  }
+  const brand = await db.getBrand();
+  await runRadarScan(brand);
+  res.json(await getRadarSummary(brand, { bypassCache: true }));
+});
+
 apiRouter.use(requireSession);
+
+apiRouter.get('/radar/summary', async (_req: Request, res: Response) => {
+  res.json(await getRadarSummary(await db.getBrand()));
+});
+
+apiRouter.post('/radar/scan', async (_req: Request, res: Response) => {
+  const brand = await db.getBrand();
+  const result = await runRadarScan(brand);
+  res.json({
+    ...result,
+    summary: await getRadarSummary(brand, { bypassCache: true }),
+  });
+});
 
 // GET /api/profile
 apiRouter.get('/profile', async (req: Request, res: Response) => {
@@ -269,6 +298,7 @@ apiRouter.patch('/findings/:id', async (req: Request, res: Response) => {
   }
 
   const updated = await db.updateFinding(req.params.id, { ...nextFinding, ...updates });
+  invalidateRadarSummaryCache();
   res.json(updated);
 });
 
@@ -285,7 +315,9 @@ apiRouter.post('/findings/:id/investigate', async (req: Request, res: Response) 
   }
   try {
     const updated = transitionFinding(finding, status, (req as AuthenticatedRequest).user!.name, note);
-    res.json(await db.updateFinding(finding.id, updated));
+    const saved = await db.updateFinding(finding.id, updated);
+    invalidateRadarSummaryCache();
+    res.json(saved);
   } catch (error) {
     res.status(409).json({ error: error instanceof Error ? error.message : 'Invalid status transition.' });
   }
@@ -325,6 +357,20 @@ apiRouter.post('/assistant/chat', async (req: Request, res: Response) => {
   const question = typeof req.body?.question === 'string' ? req.body.question.trim() : '';
   if (!question) {
     res.status(400).json({ error: 'A question is required.' });
+    return;
+  }
+  if (/\bhow many\b.*\b(profile|profiles|fake|suspected|impersonation|impersonations)\b/i.test(question)) {
+    const brand = await db.getBrand();
+    const summary = await getRadarSummary(brand);
+    if (!summary.total_suspected && !summary.confirmed_fake) {
+      res.json({ answer: "I don't have data on that." });
+      return;
+    }
+    const topIds = summary.top_5_highest_risk.map((finding) => finding.id).join(', ') || 'none';
+    const scanTime = summary.last_scan_at ? new Date(summary.last_scan_at).toLocaleString() : 'not available';
+    res.json({
+      answer: `${brand.name} radar: ${summary.total_suspected} suspected (unconfirmed) impersonations and ${summary.confirmed_fake} analyst-confirmed detections; ${summary.logo_matches} have a matching logo (threshold ${process.env.LOGO_MATCH_THRESHOLD || 80}%). Last scan: ${scanTime}. Highest-risk detection IDs: ${topIds}.`,
+    });
     return;
   }
   const findings = await db.getFindings();
@@ -382,146 +428,10 @@ apiRouter.post('/analyze', async (req: Request, res: Response) => {
 // POST /api/monitoring/run
 apiRouter.post('/monitoring/run', async (req: Request, res: Response) => {
   const brand = await db.getBrand();
-
-  // Synthetic pool of candidate entities representing continuous external surface ingestion
-  const simulatedBatch = [
-    {
-      type: 'app' as const,
-      candidate: {
-        appName: 'Acme Mobile Banking',
-        developer: 'Rogue Apps LLC',
-        publisher: 'Rogue Apps LLC',
-        packageId: 'com.fake.acme.bank',
-        platform: 'google_play' as const,
-        description:
-          'Official Acme secure banking application. Verify your account and receive rewards. Fast balance lookups.',
-        website: 'https://verify-acme-auth.top',
-        permissions: ['android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'],
-      },
-    },
-    {
-      type: 'app' as const,
-      candidate: {
-        appName: 'Acme Finanical Banking',
-        developer: 'Shadow Soft Labs',
-        publisher: 'Shadow Soft Labs',
-        packageId: 'com.shadowsoft.acme',
-        platform: 'google_play' as const,
-        description: 'Instant mobile credit line and banking check deposit tool for Acme Finanical customers.',
-      },
-    },
-    {
-      type: 'app' as const,
-      candidate: {
-        appName: 'Acme Financial Support Mobile',
-        developer: 'FastAssist Mobile',
-        publisher: 'FastAssist Mobile',
-        packageId: 'com.fastassist.acmesupport',
-        platform: 'google_play' as const,
-        description: 'Urgent customer support, account verification, and emergency card hotline.',
-        website: 'https://acme-support-live.xyz',
-      },
-    },
-    {
-      type: 'social' as const,
-      candidate: {
-        platform: 'x_twitter' as const,
-        username: 'acme_financiaI',
-        profileName: 'Acme Financial Security',
-        biography: 'Official security desk of Acme Financial. DM for account verification and security alert unlocks.',
-        links: ['https://claim-acme-security.biz'],
-        verified: false,
-      },
-    },
-    {
-      type: 'social' as const,
-      candidate: {
-        platform: 'instagram' as const,
-        username: 'acme_financial_helpdesk',
-        profileName: 'Acme Financial Help',
-        biography: 'Direct assistance for Acme banking customers. Account verification, urgent support, and bonuses.',
-        links: ['https://acme-helpdesk.link'],
-        verified: false,
-      },
-    },
-  ];
-
-  let addedCount = 0;
-  for (const item of simulatedBatch) {
-    if (item.type === 'app') {
-      const analysis = analyzeMobileApp(item.candidate, brand);
-      if (!analysis.isOfficialAsset) {
-        await db.addFinding({
-          id: `find-scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          brandId: brand.id,
-          assetType: 'mobile_application',
-          platform: item.candidate.platform,
-          candidateName: item.candidate.appName,
-          identifier: item.candidate.packageId,
-          url: `https://play.google.com/store/apps/details?id=${item.candidate.packageId}`,
-          publisherOrDeveloper: item.candidate.publisher,
-          descriptionSnippet: item.candidate.description,
-          riskScore: analysis.riskScore,
-          riskLevel: analysis.riskLevel,
-          classification: analysis.classification,
-          confidence: analysis.confidence,
-          status: 'new',
-          firstSeen: new Date().toISOString(),
-          lastSeen: new Date().toISOString(),
-          notes: [],
-          signals: analysis.signals,
-          radarBreakdown: analysis.radarBreakdown,
-          recommendedAction: analysis.recommendedAction,
-          summaryExplanation: analysis.summaryExplanation,
-          matchedOfficialAsset: analysis.matchedOfficialAsset,
-          candidatePayload: item.candidate,
-          isSimulated: true,
-        });
-        addedCount++;
-      }
-    } else {
-      const analysis = analyzeSocialCandidate(item.candidate, brand);
-      if (!analysis.isOfficialAsset) {
-        await db.addFinding({
-          id: `find-scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          brandId: brand.id,
-          assetType: 'social_profile',
-          platform: item.candidate.platform,
-          candidateName: item.candidate.profileName,
-          identifier: `@${item.candidate.username}`,
-          url: `https://${item.candidate.platform}.com/${item.candidate.username}`,
-          publisherOrDeveloper: `@${item.candidate.username}`,
-          descriptionSnippet: item.candidate.biography,
-          riskScore: analysis.riskScore,
-          riskLevel: analysis.riskLevel,
-          classification: analysis.classification,
-          confidence: analysis.confidence,
-          status: 'new',
-          firstSeen: new Date().toISOString(),
-          lastSeen: new Date().toISOString(),
-          notes: [],
-          signals: analysis.signals,
-          radarBreakdown: analysis.radarBreakdown,
-          recommendedAction: analysis.recommendedAction,
-          summaryExplanation: analysis.summaryExplanation,
-          matchedOfficialAsset: analysis.matchedOfficialAsset,
-          candidatePayload: item.candidate,
-          isSimulated: true,
-        });
-        addedCount++;
-      }
-    }
-  }
-
-  const scanStats = await db.recordMonitoringScan(addedCount);
-
+  const scan = await runRadarScan(brand);
   res.json({
-    success: true,
-    message: 'Monitoring scan completed successfully across all registered data sources.',
-    scannedSources: (await db.getSources()).length,
-    threatsIdentified: addedCount,
-    lastScanTime: scanStats.lastScanTime,
-    totalScansCount: scanStats.totalScansCount,
+    ...scan,
+    summary: await getRadarSummary(brand, { bypassCache: true }),
   });
 });
 
