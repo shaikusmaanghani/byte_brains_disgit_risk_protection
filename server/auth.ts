@@ -1,6 +1,7 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import type { User } from '../src/types/index.js';
+import { SessionModel, UserModel } from './models.js';
 
 export const DEMO_CREDENTIALS = [
   {
@@ -23,9 +24,11 @@ export const DEMO_CREDENTIALS = [
   },
 ] as const;
 
-const sessions = new Map<string, { user: User; expiresAt: number }>();
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
-export function createDemoSession(email: string, password: string, users: User[]) {
+export async function createDemoSession(email: string, password: string, users: User[]) {
   const credentials = DEMO_CREDENTIALS.find((item) => item.email === email.trim().toLowerCase());
   if (!credentials) return null;
   const supplied = scryptSync(password, credentials.passwordSalt, 64);
@@ -34,24 +37,26 @@ export function createDemoSession(email: string, password: string, users: User[]
   const user = users.find((item) => item.id === credentials.userId);
   if (!user) throw new Error(`Configured demo user ${credentials.userId} is missing.`);
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = Date.now() + 8 * 60 * 60 * 1000;
-  sessions.set(token, { user, expiresAt });
-  return { token, user, expiresAt: new Date(expiresAt).toISOString() };
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  await SessionModel.create({ tokenHash: hashToken(token), userId: user.id, expiresAt });
+  return { token, user, expiresAt: expiresAt.toISOString() };
 }
 
-export function revokeSession(token: string) {
-  sessions.delete(token);
+export async function revokeSession(token: string) {
+  await SessionModel.deleteOne({ tokenHash: hashToken(token) });
 }
 
-export function currentUser(token: string | undefined): User | null {
+export async function currentUser(token: string | undefined): Promise<User | null> {
   if (!token) return null;
-  const session = sessions.get(token);
+  const session = await SessionModel.findOne({
+    tokenHash: hashToken(token),
+    expiresAt: { $gt: new Date() },
+  }).lean().exec();
   if (!session) return null;
-  if (session.expiresAt <= Date.now()) {
-    sessions.delete(token);
-    return null;
-  }
-  return session.user;
+  const user = await UserModel.findOne({ id: session.userId }).lean().exec();
+  if (!user) throw new Error(`Session references missing demo user ${session.userId}.`);
+  const { _id: _mongoId, __v: _version, passwordHash: _passwordHash, passwordSalt: _passwordSalt, ...publicUser } = user;
+  return publicUser as User;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -59,15 +64,19 @@ export interface AuthenticatedRequest extends Request {
   sessionToken?: string;
 }
 
-export function requireSession(req: Request, res: Response, next: NextFunction) {
+export async function requireSession(req: Request, res: Response, next: NextFunction) {
   const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
-  const user = currentUser(token);
-  if (!user) {
-    res.status(401).json({ error: 'A valid demo login session is required.' });
-    return;
+  try {
+    const user = await currentUser(token);
+    if (!user) {
+      res.status(401).json({ error: 'A valid demo login session is required.' });
+      return;
+    }
+    const authenticatedRequest = req as AuthenticatedRequest;
+    authenticatedRequest.user = user;
+    authenticatedRequest.sessionToken = token;
+    next();
+  } catch (error) {
+    next(error);
   }
-  const authenticatedRequest = req as AuthenticatedRequest;
-  authenticatedRequest.user = user;
-  authenticatedRequest.sessionToken = token;
-  next();
 }

@@ -12,7 +12,7 @@ import type {
 import { alertForFinding, investigationStatus } from '../src/services/investigation.js';
 import { analyzeMobileApp, analyzeSocialCandidate } from '../src/services/detectionEngine.js';
 import { DEFAULT_BRAND, DEFAULT_SOURCES, DEFAULT_USERS, DEFAULT_WATCHLISTS } from './dbDefaults.js';
-import { AlertModel, AppStateModel, connectMongo, DetectionModel, ReportModel, UserModel } from './models.js';
+import { AlertModel, AppStateModel, connectMongo, DetectionModel, ReportModel, SessionModel, UserModel } from './models.js';
 import { DEMO_CREDENTIALS } from './auth.js';
 
 export interface DatabaseSchema {
@@ -360,6 +360,7 @@ class SentinelDatabase {
         DetectionModel.deleteMany({}),
         AlertModel.deleteMany({}),
         UserModel.deleteMany({}),
+        SessionModel.deleteMany({}),
         ReportModel.deleteMany({}),
         AppStateModel.deleteMany({}),
       ]);

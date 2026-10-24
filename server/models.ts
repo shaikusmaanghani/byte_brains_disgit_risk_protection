@@ -80,11 +80,18 @@ const appStateSchema = new Schema({
   value: { type: Schema.Types.Mixed, required: true },
 }, { strict: false, versionKey: false, minimize: false });
 
+const sessionSchema = new Schema({
+  tokenHash: { type: String, required: true, unique: true, index: true },
+  userId: { type: String, required: true, index: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+}, { strict: false, versionKey: false, minimize: false });
+
 export const UserModel = models.User || model('User', userSchema);
 export const DetectionModel = models.Detection || model('Detection', detectionSchema);
 export const AlertModel = models.Alert || model('Alert', alertSchema);
 export const ReportModel = models.Report || model('Report', reportSchema);
 export const AppStateModel = models.AppState || model('AppState', appStateSchema);
+export const SessionModel = models.Session || model('Session', sessionSchema);
 
 let connectionPromise: Promise<void> | undefined;
 export async function connectMongo(uri = process.env.MONGODB_URI): Promise<void> {
@@ -107,6 +114,7 @@ export async function connectMongo(uri = process.env.MONGODB_URI): Promise<void>
     AlertModel.init(),
     ReportModel.init(),
     AppStateModel.init(),
+    SessionModel.init(),
   ]);
 }
 

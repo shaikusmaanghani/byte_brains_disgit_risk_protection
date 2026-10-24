@@ -44,7 +44,7 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Email and password are required.' });
     return;
   }
-  const session = createDemoSession(email, password, await db.getUsers());
+  const session = await createDemoSession(email, password, await db.getUsers());
   if (!session) {
     res.status(401).json({ error: 'Invalid demo credentials.' });
     return;
@@ -56,9 +56,9 @@ apiRouter.get('/auth/me', requireSession, (req: Request, res: Response) => {
   res.json((req as AuthenticatedRequest).user);
 });
 
-apiRouter.post('/auth/logout', requireSession, (req: Request, res: Response) => {
+apiRouter.post('/auth/logout', requireSession, async (req: Request, res: Response) => {
   const token = (req as AuthenticatedRequest).sessionToken;
-  if (token) revokeSession(token);
+  if (token) await revokeSession(token);
   res.json({ success: true });
 });
 
