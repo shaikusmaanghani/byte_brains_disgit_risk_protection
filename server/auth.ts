@@ -2,7 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import type { User } from '../src/types/index.js';
 
-const DEMO_CREDENTIALS = [
+export const DEMO_CREDENTIALS = [
   {
     email: 'analyst1@sentinelshield.demo',
     passwordSalt: 'sentinel-analyst1-v1',

@@ -10,8 +10,9 @@
     "vercel-build": "vite build",
     "start": "tsx server.ts",
     "preview": "vite preview",
-    "test": "tsx tests/detection.test.ts && tsx tests/round2.test.ts",
+    "test": "tsx tests/detection.test.ts && tsx tests/round2.test.ts && tsx tests/mongoPersistence.test.ts",
     "seed": "tsx scripts/seed.ts",
+    "import:json": "tsx scripts/importJson.ts",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true }); require('fs').rmSync('server.js', { force: true })\"",
     "lint": "tsc --noEmit"
   },

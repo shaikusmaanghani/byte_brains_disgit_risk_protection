@@ -212,6 +212,7 @@ export interface Finding {
   isSimulated: boolean;
   investigationStatus?: InvestigationStatus;
   scoreBreakdown?: Record<string, number>;
+  score_breakdown?: Record<string, number>;
   history?: InvestigationHistoryEntry[];
   isOfficialAsset?: boolean;
   source?: {

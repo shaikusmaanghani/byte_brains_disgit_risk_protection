@@ -26,8 +26,8 @@ apiRouter.use((req, res, next) => {
 });
 
 // GET /api/health
-apiRouter.get('/health', (req: Request, res: Response) => {
-  const health = db.getSystemHealth();
+apiRouter.get('/health', async (req: Request, res: Response) => {
+  const health = await db.getSystemHealth();
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -38,13 +38,13 @@ apiRouter.get('/health', (req: Request, res: Response) => {
 });
 
 // POST /api/auth/login
-apiRouter.post('/auth/login', (req: Request, res: Response) => {
+apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body as { email?: string; password?: string };
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password are required.' });
     return;
   }
-  const session = createDemoSession(email, password, db.getUsers());
+  const session = createDemoSession(email, password, await db.getUsers());
   if (!session) {
     res.status(401).json({ error: 'Invalid demo credentials.' });
     return;
@@ -65,33 +65,33 @@ apiRouter.post('/auth/logout', requireSession, (req: Request, res: Response) => 
 apiRouter.use(requireSession);
 
 // GET /api/profile
-apiRouter.get('/profile', (req: Request, res: Response) => {
-  res.json(db.getBrand());
+apiRouter.get('/profile', async (req: Request, res: Response) => {
+  res.json(await db.getBrand());
 });
 
 // PUT /api/profile
-apiRouter.put('/profile', (req: Request, res: Response) => {
-  const updated = db.updateBrand(req.body);
+apiRouter.put('/profile', async (req: Request, res: Response) => {
+  const updated = await db.updateBrand(req.body);
   res.json(updated);
 });
 
 // GET /api/social/findings
-apiRouter.get('/social/findings', (req: Request, res: Response) => {
-  const all = db.getFindings();
+apiRouter.get('/social/findings', async (req: Request, res: Response) => {
+  const all = await db.getFindings();
   const filtered = all.filter((f) => f.assetType === 'social_profile');
   res.json(filtered);
 });
 
 // GET /api/apps/findings
-apiRouter.get('/apps/findings', (req: Request, res: Response) => {
-  const all = db.getFindings();
+apiRouter.get('/apps/findings', async (req: Request, res: Response) => {
+  const all = await db.getFindings();
   const filtered = all.filter((f) => f.assetType === 'mobile_application');
   res.json(filtered);
 });
 
 // GET /api/findings
-apiRouter.get('/findings', (req: Request, res: Response) => {
-  let list = db.getFindings();
+apiRouter.get('/findings', async (req: Request, res: Response) => {
+  let list = await db.getFindings();
   const { search, platform, assetType, risk, status, sort } = req.query;
   if (search && typeof search === 'string') {
     const q = search.toLowerCase();
@@ -135,8 +135,8 @@ apiRouter.get('/findings', (req: Request, res: Response) => {
 });
 
 // GET /api/findings/:id
-apiRouter.get('/findings/:id', (req: Request, res: Response) => {
-  const item = db.getFindingById(req.params.id);
+apiRouter.get('/findings/:id', async (req: Request, res: Response) => {
+  const item = await db.getFindingById(req.params.id);
   if (!item) {
     res.status(404).json({ error: 'Finding not found' });
     return;
@@ -145,8 +145,8 @@ apiRouter.get('/findings/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/findings
-apiRouter.post('/findings', (req: Request, res: Response) => {
-  const brand = db.getBrand();
+apiRouter.post('/findings', async (req: Request, res: Response) => {
+  const brand = await db.getBrand();
   const candidate = req.body;
   const isApp = candidate.assetType === 'mobile_application' || candidate.appName;
 
@@ -203,13 +203,13 @@ apiRouter.post('/findings', (req: Request, res: Response) => {
     isOfficialAsset: false,
   };
 
-  const saved = db.addFinding(newFinding);
+  const saved = await db.addFinding(newFinding);
   res.status(201).json(saved);
 });
 
 // PATCH /api/findings/:id
-apiRouter.patch('/findings/:id', (req: Request, res: Response) => {
-  const existing = db.getFindingById(req.params.id);
+apiRouter.patch('/findings/:id', async (req: Request, res: Response) => {
+  const existing = await db.getFindingById(req.params.id);
   if (!existing) {
     res.status(404).json({ error: 'Finding not found' });
     return;
@@ -268,12 +268,12 @@ apiRouter.patch('/findings/:id', (req: Request, res: Response) => {
     delete updates.newNote;
   }
 
-  const updated = db.updateFinding(req.params.id, { ...nextFinding, ...updates });
+  const updated = await db.updateFinding(req.params.id, { ...nextFinding, ...updates });
   res.json(updated);
 });
 
-apiRouter.post('/findings/:id/investigate', (req: Request, res: Response) => {
-  const finding = db.getFindingById(req.params.id);
+apiRouter.post('/findings/:id/investigate', async (req: Request, res: Response) => {
+  const finding = await db.getFindingById(req.params.id);
   if (!finding) {
     res.status(404).json({ error: 'Finding not found.' });
     return;
@@ -285,14 +285,14 @@ apiRouter.post('/findings/:id/investigate', (req: Request, res: Response) => {
   }
   try {
     const updated = transitionFinding(finding, status, (req as AuthenticatedRequest).user!.name, note);
-    res.json(db.updateFinding(finding.id, updated));
+    res.json(await db.updateFinding(finding.id, updated));
   } catch (error) {
     res.status(409).json({ error: error instanceof Error ? error.message : 'Invalid status transition.' });
   }
 });
 
-apiRouter.post('/findings/:id/report', (req: Request, res: Response) => {
-  const finding = db.getFindingById(req.params.id);
+apiRouter.post('/findings/:id/report', async (req: Request, res: Response) => {
+  const finding = await db.getFindingById(req.params.id);
   if (!finding) {
     res.status(404).json({ error: 'Finding not found.' });
     return;
@@ -300,19 +300,20 @@ apiRouter.post('/findings/:id/report', (req: Request, res: Response) => {
   try {
     const actor = (req as AuthenticatedRequest).user!.name;
     const report = draftTakedownReport(finding, actor);
-    db.updateFinding(finding.id, appendHistory(finding, actor, 'Report drafted', 'Draft takedown report generated.'));
+    await db.updateFinding(finding.id, appendHistory(finding, actor, 'Report drafted', 'Draft takedown report generated.'));
+    await db.createReport({ id: `report-${finding.id}-${Date.now()}`, detectionId: finding.id, actor, content: report, createdAt: new Date().toISOString() });
     res.json({ report });
   } catch (error) {
     res.status(409).json({ error: error instanceof Error ? error.message : 'Could not draft report.' });
   }
 });
 
-apiRouter.get('/alerts', (req: Request, res: Response) => {
-  res.json(db.getAlerts());
+apiRouter.get('/alerts', async (req: Request, res: Response) => {
+  res.json(await db.getAlerts());
 });
 
-apiRouter.post('/alerts/:id/read', (req: Request, res: Response) => {
-  const alert = db.markAlertRead(req.params.id);
+apiRouter.post('/alerts/:id/read', async (req: Request, res: Response) => {
+  const alert = await db.markAlertRead(req.params.id);
   if (!alert) {
     res.status(404).json({ error: 'Alert not found.' });
     return;
@@ -320,27 +321,28 @@ apiRouter.post('/alerts/:id/read', (req: Request, res: Response) => {
   res.json(alert);
 });
 
-apiRouter.post('/assistant/chat', (req: Request, res: Response) => {
+apiRouter.post('/assistant/chat', async (req: Request, res: Response) => {
   const question = typeof req.body?.question === 'string' ? req.body.question.trim() : '';
   if (!question) {
     res.status(400).json({ error: 'A question is required.' });
     return;
   }
-  const findings = db.getFindings();
+  const findings = await db.getFindings();
   const actor = (req as AuthenticatedRequest).user!.name;
   const answer = answerAnalystQuestion(question, findings, actor);
   if (/draft|takedown/i.test(question) && answer.startsWith('# Platform review request')) {
     const finding = getDetection(findings, question);
     if (finding) {
-      db.updateFinding(finding.id, appendHistory(finding, actor, 'Report drafted', 'Draft takedown report generated via the offline assistant.'));
+      await db.updateFinding(finding.id, appendHistory(finding, actor, 'Report drafted', 'Draft takedown report generated via the offline assistant.'));
+      await db.createReport({ id: `report-${finding.id}-${Date.now()}`, detectionId: finding.id, actor, content: answer, createdAt: new Date().toISOString() });
     }
   }
   res.json({ answer });
 });
 
 // DELETE /api/findings/:id
-apiRouter.delete('/findings/:id', (req: Request, res: Response) => {
-  const success = db.deleteFinding(req.params.id);
+apiRouter.delete('/findings/:id', async (req: Request, res: Response) => {
+  const success = await db.deleteFinding(req.params.id);
   if (!success) {
     res.status(404).json({ error: 'Finding not found' });
     return;
@@ -349,24 +351,24 @@ apiRouter.delete('/findings/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/analyze/app
-apiRouter.post('/analyze/app', (req: Request, res: Response) => {
-  const brand = db.getBrand();
+apiRouter.post('/analyze/app', async (req: Request, res: Response) => {
+  const brand = await db.getBrand();
   const candidate: AppCandidateInput = req.body;
   const analysis = analyzeMobileApp(candidate, brand);
   res.json(analysis);
 });
 
 // POST /api/analyze/social
-apiRouter.post('/analyze/social', (req: Request, res: Response) => {
-  const brand = db.getBrand();
+apiRouter.post('/analyze/social', async (req: Request, res: Response) => {
+  const brand = await db.getBrand();
   const candidate: SocialCandidateInput = req.body;
   const analysis = analyzeSocialCandidate(candidate, brand);
   res.json(analysis);
 });
 
 // POST /api/analyze (universal)
-apiRouter.post('/analyze', (req: Request, res: Response) => {
-  const brand = db.getBrand();
+apiRouter.post('/analyze', async (req: Request, res: Response) => {
+  const brand = await db.getBrand();
   const candidate = req.body;
   if (candidate.appName || candidate.packageId || candidate.assetType === 'mobile_application') {
     const analysis = analyzeMobileApp(candidate as AppCandidateInput, brand);
@@ -378,8 +380,8 @@ apiRouter.post('/analyze', (req: Request, res: Response) => {
 });
 
 // POST /api/monitoring/run
-apiRouter.post('/monitoring/run', (req: Request, res: Response) => {
-  const brand = db.getBrand();
+apiRouter.post('/monitoring/run', async (req: Request, res: Response) => {
+  const brand = await db.getBrand();
 
   // Synthetic pool of candidate entities representing continuous external surface ingestion
   const simulatedBatch = [
@@ -449,7 +451,7 @@ apiRouter.post('/monitoring/run', (req: Request, res: Response) => {
     if (item.type === 'app') {
       const analysis = analyzeMobileApp(item.candidate, brand);
       if (!analysis.isOfficialAsset) {
-        db.addFinding({
+        await db.addFinding({
           id: `find-scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           brandId: brand.id,
           assetType: 'mobile_application',
@@ -480,7 +482,7 @@ apiRouter.post('/monitoring/run', (req: Request, res: Response) => {
     } else {
       const analysis = analyzeSocialCandidate(item.candidate, brand);
       if (!analysis.isOfficialAsset) {
-        db.addFinding({
+        await db.addFinding({
           id: `find-scan-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           brandId: brand.id,
           assetType: 'social_profile',
@@ -511,12 +513,12 @@ apiRouter.post('/monitoring/run', (req: Request, res: Response) => {
     }
   }
 
-  const scanStats = db.recordMonitoringScan(addedCount);
+  const scanStats = await db.recordMonitoringScan(addedCount);
 
   res.json({
     success: true,
     message: 'Monitoring scan completed successfully across all registered data sources.',
-    scannedSources: db.getSources().length,
+    scannedSources: (await db.getSources()).length,
     threatsIdentified: addedCount,
     lastScanTime: scanStats.lastScanTime,
     totalScansCount: scanStats.totalScansCount,
@@ -524,9 +526,8 @@ apiRouter.post('/monitoring/run', (req: Request, res: Response) => {
 });
 
 // GET /api/analytics/overview
-apiRouter.get('/analytics/overview', (req: Request, res: Response) => {
-  const brand = db.getBrand();
-  const findings = db.getFindings();
+apiRouter.get('/analytics/overview', async (req: Request, res: Response) => {
+  const [brand, findings] = await Promise.all([db.getBrand(), db.getFindings()]);
 
   const totalMonitoredAssets =
     brand.officialApps.length +
@@ -587,8 +588,8 @@ apiRouter.get('/analytics/overview', (req: Request, res: Response) => {
 });
 
 // GET /api/analytics/trends
-apiRouter.get('/analytics/trends', (req: Request, res: Response) => {
-  const findings = db.getFindings();
+apiRouter.get('/analytics/trends', async (req: Request, res: Response) => {
+  const findings = await db.getFindings();
 
   // Timeline series (past 7 days)
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -667,14 +668,14 @@ apiRouter.get('/analytics/trends', (req: Request, res: Response) => {
 });
 
 // GET /api/sources
-apiRouter.get('/sources', (req: Request, res: Response) => {
-  res.json(db.getSources());
+apiRouter.get('/sources', async (req: Request, res: Response) => {
+  res.json(await db.getSources());
 });
 
 // POST /api/sources
-apiRouter.post('/sources', (req: Request, res: Response) => {
+apiRouter.post('/sources', async (req: Request, res: Response) => {
   const { id, ...updates } = req.body;
-  const updated = db.updateSource(id, updates);
+  const updated = await db.updateSource(id, updates);
   if (!updated) {
     res.status(404).json({ error: 'Source not found' });
     return;
@@ -683,12 +684,12 @@ apiRouter.post('/sources', (req: Request, res: Response) => {
 });
 
 // GET /api/watchlists
-apiRouter.get('/watchlists', (req: Request, res: Response) => {
-  res.json(db.getWatchlists());
+apiRouter.get('/watchlists', async (req: Request, res: Response) => {
+  res.json(await db.getWatchlists());
 });
 
 // POST /api/watchlists
-apiRouter.post('/watchlists', (req: Request, res: Response) => {
+apiRouter.post('/watchlists', async (req: Request, res: Response) => {
   const newRule = {
     id: `w-${Date.now()}`,
     name: req.body.name,
@@ -699,14 +700,13 @@ apiRouter.post('/watchlists', (req: Request, res: Response) => {
     hitsCount: 0,
     createdAt: new Date().toISOString(),
   };
-  const created = db.addWatchlist(newRule);
+  const created = await db.addWatchlist(newRule);
   res.status(201).json(created);
 });
 
 // GET /api/threat-graph
-apiRouter.get('/threat-graph', (req: Request, res: Response) => {
-  const brand = db.getBrand();
-  const findings = db.getFindings();
+apiRouter.get('/threat-graph', async (req: Request, res: Response) => {
+  const [brand, findings] = await Promise.all([db.getBrand(), db.getFindings()]);
 
   const nodes: ThreatGraphNode[] = [];
   const links: ThreatGraphLink[] = [];
@@ -815,10 +815,9 @@ apiRouter.get('/threat-graph', (req: Request, res: Response) => {
 });
 
 // GET /api/reports/export
-apiRouter.get('/reports/export', (req: Request, res: Response) => {
+apiRouter.get('/reports/export', async (req: Request, res: Response) => {
   const { format } = req.query;
-  const brand = db.getBrand();
-  const findings = db.getFindings();
+  const [brand, findings] = await Promise.all([db.getBrand(), db.getFindings()]);
 
   if (format === 'csv') {
     const headers = [
@@ -878,6 +877,6 @@ apiRouter.get('/reports/export', (req: Request, res: Response) => {
 });
 
 // GET /api/system/health
-apiRouter.get('/system/health', (req: Request, res: Response) => {
-  res.json(db.getSystemHealth());
+apiRouter.get('/system/health', async (req: Request, res: Response) => {
+  res.json(await db.getSystemHealth());
 });

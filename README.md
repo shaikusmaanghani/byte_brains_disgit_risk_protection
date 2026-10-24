@@ -19,7 +19,7 @@ SentinelShield is an enterprise Digital Risk Protection (DRP) and Brand Imperson
                         │ REST API (Port 3000)
                         ▼
             ┌───────────────────────┐
-            │   FASTAPI / EXPRESS   │
+            │       EXPRESS        │
             │ Authentication (JWT)  │
             │ API / Validation      │
             └───────────┬───────────┘
@@ -34,8 +34,8 @@ SentinelShield is an enterprise Digital Risk Protection (DRP) and Brand Imperson
          └─────────────┼───────────────┘
                        ▼
                 ┌─────────────┐
-                │ PostgreSQL  │
-                │ / SQLite DB │
+                │  MongoDB    │
+                │  (Mongoose) │
                 └─────────────┘
 ```
 
@@ -78,17 +78,31 @@ npm install
 ```bash
 Copy-Item .env.example .env
 ```
+Set `MONGODB_URI` in `.env` to a reachable MongoDB instance before running the app or seed. The server fails at startup with a clear error if it is missing; it never falls back to the JSON file.
 
 ### 3. Run Automated Detection Engine Tests
 ```bash
 npm test
 ```
 
-### 4. Start Full-Stack SOC Server
+### 4. Seed MongoDB with demo data
+```bash
+npm run seed
+```
+The seed imports 24 demo detections, the official-asset allowlist, alerts, and demo users with stored scrypt password hashes. Re-running is idempotent. To intentionally clear the SentinelShield collections before seeding, run `npm run seed -- --reset`.
+
+For a one-time import of an existing `data/sentinel_db.json`, run:
+```bash
+npm run import:json
+```
+
+### 5. Start Full-Stack SOC Server
 ```bash
 npm run dev
 ```
 Open **http://localhost:3000** in your browser.
+
+Detection records, embedded evidence and history, alerts, users, and drafted reports are stored in MongoDB. Brand profile, monitoring sources, watchlists, and scan counters are persisted in the MongoDB app-state collection.
 
 ---
 
@@ -135,7 +149,7 @@ Scoring weights and severity thresholds are defined in `src/services/scoringConf
 
 Severity: Critical ≥85, High ≥75, Medium ≥50, Low ≥20, Informational <20. `HIGH_THRESHOLD` defaults to 75. Logo similarity is skipped and explained if the ingestion source has not supplied a 64-bit logo hash. Scoring never claims a pHash result from a URL alone.
 
-`npm run seed` adds 18 clearly labelled simulated detections through the Round 1 TypeScript engine. The seed includes a near-copy app, social lookalikes, a harmless fan page, a homoglyph domain string, and copied description under a different publisher. The allowlisted official app is deliberately excluded. Re-running is idempotent by platform and identifier. Seed records are demonstration data, not live intelligence.
+`npm run seed` loads the 24 clearly labelled simulated detections from the existing Round 1 JSON dataset into MongoDB, including a near-copy app, social lookalikes, a harmless fan page, a homoglyph domain, and copied description under a different publisher. The official-asset allowlist is stored alongside the brand profile. Re-running is idempotent by detection ID. Seed records are demonstration data, not live intelligence.
 
 ### Screenshot / GIF checklist
 
@@ -153,7 +167,7 @@ Severity: Critical ≥85, High ≥75, Medium ≥50, Low ≥20, Informational <20
 
 ```
 ├── backend/            # FastAPI Python backend (engine, schemas, routers)
-├── database/           # PostgreSQL & SQLite relational SQL schema
+├── database/           # Legacy relational schema reference
 ├── docker/             # Dockerfile and docker-compose.yml
 ├── docs/               # Architecture, API specifications, and detection guides
 ├── server/             # Express REST API, persistence manager, and seed data

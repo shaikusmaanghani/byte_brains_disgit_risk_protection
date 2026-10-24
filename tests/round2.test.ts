@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { db } from '../server/db';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { DEFAULT_BRAND } from '../server/dbDefaults';
 import {
   analyzeMobileApp,
   analyzeSocialCandidate,
@@ -9,9 +11,12 @@ import { alertForFinding } from '../src/services/investigation';
 import { transitionFinding } from '../src/services/investigation';
 import { draftTakedownReport, assertSafeReportWording } from '../src/services/takedownReport';
 import { answerAnalystQuestion } from '../src/services/analystAssistant';
-import type { DetectionAlert } from '../src/types';
+import type { DatabaseSchema } from '../server/db';
+import type { DetectionAlert, Finding } from '../src/types';
 
-const brand = db.getBrand();
+const persisted = JSON.parse(readFileSync(path.resolve(process.cwd(), 'data', 'sentinel_db.json'), 'utf8')) as DatabaseSchema;
+const brand = persisted.brand || DEFAULT_BRAND;
+const findings = persisted.findings as Finding[];
 
 const clone = analyzeMobileApp({
   appName: 'Acme Mobile Banking',
@@ -70,7 +75,7 @@ assert.equal(perceptualHashDistance('ffffffffffffffff', '0000000000000000'), 64)
 assert.equal(perceptualHashDistance('0000000000000000', '0000000000000000'), 0);
 assert.equal(perceptualHashDistance('not-a-hash', '0000000000000000'), null);
 
-const firstFinding = db.getFindings()[0];
+const firstFinding = findings[0];
 assert.ok(firstFinding, 'Seed database must provide findings for workflow tests.');
 const highRiskFinding = { ...firstFinding, riskScore: 80, riskLevel: 'high' as const, status: 'new' as const, investigationStatus: 'New' as const };
 const alerts: DetectionAlert[] = [];
@@ -99,7 +104,7 @@ assert.equal(
   'Reopened',
 );
 
-const confirmed = db.getFindings().find((finding) => finding.status === 'confirmed_threat');
+const confirmed = findings.find((finding) => finding.status === 'confirmed_threat');
 assert.ok(confirmed, 'A confirmed demo detection is needed for report tests.');
 const report = draftTakedownReport(confirmed, 'Analyst One');
 assert.match(report, /observed/i);
@@ -111,7 +116,7 @@ assert.throws(
   /only for Confirmed/i,
 );
 
-const answer = answerAnalystQuestion('Why is #1 scored?', db.getFindings(), 'Analyst One');
+const answer = answerAnalystQuestion('Why is #1 scored?', findings, 'Analyst One');
 assert.match(answer, /Detection find-/);
 assert.match(answer, /points/);
 const actorHistoryFinding = {
