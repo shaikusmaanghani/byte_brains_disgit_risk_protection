@@ -76,19 +76,17 @@ npm install
 
 ### 2. Configure Environment
 ```bash
-cp .env.example .env
+Copy-Item .env.example .env
 ```
 
 ### 3. Run Automated Detection Engine Tests
 ```bash
 npm test
-# or: npx tsx tests/detection.test.ts
 ```
 
 ### 4. Start Full-Stack SOC Server
 ```bash
 npm run dev
-# Starts full-stack Express REST API + Vite middlewares on port 3000
 ```
 Open **http://localhost:3000** in your browser.
 
@@ -96,31 +94,58 @@ Open **http://localhost:3000** in your browser.
 
 ## 🧑‍💻 Demo User Accounts
 
-| Role | Name | Email | Permissions |
-|---|---|---|---|
-| **Admin** | Marcus Vance | `admin@sentinelshield.io` | Full System & Policy Control |
-| **Analyst** | Sarah Chen | `sarah.chen@sentinelshield.io` | Investigations, Notes & Status |
-| **Viewer** | David Mercer | `viewer@sentinelshield.io` | Read-only Auditing |
+These demo accounts are for local demonstration only. Passwords are scrypt-hashed server-side; never reuse a real password.
 
-*(You can switch between roles in one click from the header avatar dropdown.)*
+| Role | Email | Password |
+|---|---|---|
+| Analyst 1 | `analyst1@sentinelshield.demo` | `AnalystDemo2026!` |
+| Analyst 2 | `analyst2@sentinelshield.demo` | `Analyst2Demo2026!` |
+| Admin | `admin@sentinelshield.demo` | `AdminDemo2026!` |
 
 ---
 
-## 🎬 11-Step SOC Demonstration Guide
+## 🎬 Round 2 — 3-minute SOC demonstration guide
 
-1. **Brand Profile**: View registered brand **Acme Financial** and official production apps.
-2. **Official App Whitelist**: Examine *Acme Mobile Banking* (Package: `com.acme.mobilebanking`, Publisher: `Acme Financial Technologies LLC`).
-3. **Run Monitoring Scan**: Click **"Run Monitoring Scan"** in the header to dispatch the simulated surveillance crawler.
-4. **Discovered Threat**: The engine flags *Acme Mobile Banking* by `Rogue Apps LLC`.
-5. **Evaluation**:
-   - **Risk Score: 92/100 (CRITICAL)**
-   - **Signals**: Name Similarity (25), Publisher Mismatch (20), Developer Mismatch (15), Description Mimicry (15), Package Mismatch (5), Domain Mismatch (5).
-6. **Threat Detail**: Open the finding to view the **Side-by-Side Diff** (Candidate vs Official).
-7. **Impersonation Radar**: Inspect the 8-axis geometric radar showing why the app was flagged.
-8. **Threat Relationship Graph**: Navigate to **Threat Graph** to visualize the link between Acme Financial, the unauthorized publisher, and the rogue APK.
-9. **Analyst Workflow**: Transition status from `New` to `Confirmed Threat`, assign analyst `Sarah Chen`, and record an investigation note.
-10. **Brand Twin Scanner**: Test manual evaluation by loading presets (`Rogue Banking App`, `Homoglyph Latin I Spoof`, `Official Asset Exclusion`).
-11. **Generate Report**: Go to **Executive Reports** and export as **CSV**, **JSON**, or print a styled **PDF report**.
+1. Log in as Analyst 1 with the demo credentials above.
+2. Open **Threat Findings** and select the highest-scoring detection; inspect its priority score and alert bell.
+3. Review the side-by-side comparison and each evidence signal's points and plain-language explanation.
+4. Enter an analyst reason and select **Confirm Threat**; verify the actor and timestamp in history.
+5. Generate the confirmed-only takedown draft, edit it, copy it, export `.md`/`.txt`, or print to PDF.
+6. Run a scan. A newly high-risk detection fires one alert; re-scanning does not duplicate that alert unless severity escalates.
+7. Mark **Acme Financial Fan Club** as False Positive with a reason; it leaves the default priority queue.
+8. Ask the offline assistant “What are the top 5 risks?”, “Why is #1 scored?”, or “What did Analyst One do on #1?”
+
+## Explainable scoring
+
+Scoring weights and severity thresholds are defined in `src/services/scoringConfig.ts`. Signals are deterministic, additive, capped at 100, and persisted with each detection.
+
+| Signal | Maximum points | Details |
+|---|---:|---|
+| Name / handle similarity | 25 | Damerau-Levenshtein plus Jaro-Winkler, confusable normalization, modifier removal |
+| Exact official app name + unknown publisher | +20 | Explicit exact-clone indicator |
+| Publisher mismatch | 20 | Publisher not in the registered publisher list |
+| Developer mismatch | 15 | Applied separately when publisher and developer differ |
+| Description overlap | 15 | Token Jaccard and registered brand terms |
+| Logo dHash resemblance | 10 | Hamming distance between supplied 64-bit hexadecimal dHashes |
+| Package mismatch | 5 | Non-official app package identifier |
+| Non-official domain | 5 | Candidate link is not in the official-domain allowlist |
+| Suspicious language / permissions | 5 | Login, urgent verification, giveaway, rewards, sensitive permissions |
+| Homoglyph substitution | 15 | Confusable Unicode and common character substitutions |
+| Recent creation | 5 | Candidate creation date within 14 days |
+
+Severity: Critical ≥85, High ≥75, Medium ≥50, Low ≥20, Informational <20. `HIGH_THRESHOLD` defaults to 75. Logo similarity is skipped and explained if the ingestion source has not supplied a 64-bit logo hash. Scoring never claims a pHash result from a URL alone.
+
+`npm run seed` adds 18 clearly labelled simulated detections through the Round 1 TypeScript engine. The seed includes a near-copy app, social lookalikes, a harmless fan page, a homoglyph domain string, and copied description under a different publisher. The allowlisted official app is deliberately excluded. Re-running is idempotent by platform and identifier. Seed records are demonstration data, not live intelligence.
+
+### Screenshot / GIF checklist
+
+- [ ] Demo login and labelled credentials
+- [ ] Priority queue filters, scores, severity colors, and summary cards
+- [ ] Detection detail comparison and “why this score” evidence
+- [ ] Status transition and timestamped history
+- [ ] Alert bell before/after a repeated scan
+- [ ] Editable takedown draft and exported report
+- [ ] Offline assistant response citing detection IDs
 
 ---
 

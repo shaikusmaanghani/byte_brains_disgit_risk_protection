@@ -18,6 +18,7 @@ class OfficialAppSchema(BaseModel):
     category: str
     iconUrl: Optional[str] = None
     officialDomain: Optional[str] = None
+    logoHash: Optional[str] = None
 
 class OfficialSocialAccountSchema(BaseModel):
     id: str
@@ -27,11 +28,13 @@ class OfficialSocialAccountSchema(BaseModel):
     profileUrl: str
     verified: bool
     avatarUrl: Optional[str] = None
+    avatarHash: Optional[str] = None
 
 class BrandProfileSchema(BaseModel):
     id: str
     name: str
     logoUrl: str
+    logoHash: Optional[str] = None
     aliases: List[str] = []
     officialDomains: List[str] = []
     brandKeywords: List[str] = []
@@ -57,6 +60,8 @@ class AppCandidateInput(BaseModel):
     version: Optional[str] = None
     permissions: Optional[List[str]] = []
     website: Optional[str] = None
+    createdAt: Optional[str] = None
+    logoHash: Optional[str] = None
 
 class SocialCandidateInput(BaseModel):
     platform: str
@@ -69,6 +74,8 @@ class SocialCandidateInput(BaseModel):
     avatarUrl: Optional[str] = None
     links: Optional[List[str]] = []
     keywords: Optional[List[str]] = []
+    createdAt: Optional[str] = None
+    avatarHash: Optional[str] = None
 
 class DetectionSignalSchema(BaseModel):
     type: str

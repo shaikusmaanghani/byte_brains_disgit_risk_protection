@@ -1,32 +1,33 @@
-import React from 'react';
-import {
-  ShieldAlert,
-  Bell,
-  RefreshCw,
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  UserCheck,
-} from 'lucide-react';
-import { User, RiskLevel } from '../types';
+import React, { useState } from 'react';
+import { Bell, LogOut, RefreshCw } from 'lucide-react';
+import type { DetectionAlert, Finding, User } from '../types';
 
 interface HeaderProps {
   currentUser: User;
-  onSwitchUser: (role: 'admin' | 'analyst' | 'viewer') => void;
+  alerts: DetectionAlert[];
+  findings: Finding[];
+  onLogout: () => void;
+  onReadAlert: (alert: DetectionAlert) => void;
   onRunScan: () => void;
   isScanning: boolean;
   overallThreatLevel: 'Critical' | 'High' | 'Medium' | 'Low' | 'Informational';
   lastScanTime: string;
+  onOpenFinding: (finding: Finding) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentUser,
-  onSwitchUser,
+  alerts,
+  findings,
+  onLogout,
+  onReadAlert,
   onRunScan,
   isScanning,
   overallThreatLevel,
   lastScanTime,
+  onOpenFinding,
 }) => {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const threatBadgeColors = {
     Critical: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
     High: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
@@ -34,108 +35,78 @@ export const Header: React.FC<HeaderProps> = ({
     Low: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
     Informational: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
   };
+  const unread = alerts.filter((alert) => !alert.read).length;
 
   return (
     <header className="h-16 border-b border-slate-800 bg-slate-900/90 backdrop-blur px-6 flex items-center justify-between z-20 shrink-0 sticky top-0">
-      {/* Zone 1: Brand & Threat Level Indicator */}
-      <div className="flex items-center gap-5">
-        <div className="flex items-center gap-3">
-          <img
-            src="/src/assets/images/sentinel_shield_emblem_1791484953134.jpg"
-            alt="SentinelShield Emblem"
-            className="w-9 h-9 rounded-lg border border-cyan-500/30 object-cover shadow-sm shadow-cyan-500/20"
-            referrerPolicy="no-referrer"
-          />
-          <div>
-            <div className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-              <span>SentinelShield</span>
-              <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 border border-slate-700 font-normal">
-                SOC v3.8
-              </span>
-            </div>
-            <div className="text-xs text-slate-400 font-normal">Digital Risk Protection — Brand & App Defense</div>
+      <div className="flex items-center gap-4">
+        <img
+          src="/src/assets/images/sentinel_shield_emblem_1791484953134.jpg"
+          alt="SentinelShield"
+          className="w-9 h-9 rounded-lg border border-cyan-500/30 object-cover"
+        />
+        <div>
+          <div className="text-base font-bold text-white flex items-center gap-2">
+            SentinelShield
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 border border-slate-700 font-normal">DEMO</span>
           </div>
+          <div className="text-[11px] text-slate-400">Digital Risk Protection — Investigation Workspace</div>
         </div>
-
-        <div className="h-6 w-px bg-slate-800 hidden md:block" />
-
-        {/* Global Threat Level Badge */}
-        <div className="hidden lg:flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Threat Level:</span>
-          <div
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider border ${threatBadgeColors[overallThreatLevel]}`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-            {overallThreatLevel}
-          </div>
+        <div className={`hidden lg:block ml-3 px-2.5 py-1 rounded border text-[10px] font-bold uppercase ${threatBadgeColors[overallThreatLevel]}`}>
+          {overallThreatLevel} · Scan {lastScanTime}
         </div>
       </div>
 
-      {/* Zone 2: Scan Action & Status */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <button
           onClick={onRunScan}
           disabled={isScanning}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide border transition-all ${
-            isScanning
-              ? 'bg-cyan-950/60 text-cyan-400 border-cyan-500/40 cursor-wait'
-              : 'bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold border-cyan-400/50 shadow-md shadow-cyan-500/20 active:scale-95'
-          }`}
-          title="Dispatch automated web, app store, and social threat collector"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-500/40 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-slate-950 text-xs font-bold"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-          <span>{isScanning ? 'Scanning Surface...' : 'Run Monitoring Scan'}</span>
+          {isScanning ? 'Scanning…' : 'Run scan'}
         </button>
-
-        {/* User Role Switcher Dropdown */}
-        <div className="relative group">
-          <button className="flex items-center gap-2.5 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-left transition-colors">
-            <img
-              src="/src/assets/images/soc_analyst_avatar_1791484969026.jpg"
-              alt={currentUser.name}
-              className="w-7 h-7 rounded-full object-cover border border-slate-600"
-              referrerPolicy="no-referrer"
-            />
-            <div className="hidden sm:block">
-              <div className="text-xs font-medium text-slate-200">{currentUser.name}</div>
-              <div className="text-[10px] text-slate-400 capitalize">{currentUser.role}</div>
-            </div>
+        <div className="relative">
+          <button
+            aria-label={`Notifications, ${unread} unread`}
+            aria-expanded={notificationsOpen}
+            onClick={() => setNotificationsOpen((open) => !open)}
+            className="relative p-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200"
+          >
+            <Bell className="w-4 h-4" />
+            {unread > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] text-white font-bold">{unread}</span>}
           </button>
-
-          {/* Quick role switch dropdown */}
-          <div className="absolute right-0 mt-1 w-52 py-1.5 bg-slate-900 border border-slate-700 rounded-lg shadow-xl shadow-black/60 hidden group-hover:block group-focus-within:block z-50">
-            <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 mb-1">
-              Switch Analyst Role
+          {notificationsOpen && (
+            <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl z-50">
+              <div className="px-4 py-3 border-b border-slate-800 text-xs font-bold text-white">High-risk alerts</div>
+              {alerts.length ? alerts.slice(0, 12).map((alert) => {
+                const finding = findings.find((item) => item.id === alert.detectionId);
+                return (
+                  <button
+                    key={alert.id}
+                    onClick={() => {
+                      onReadAlert(alert);
+                      if (finding) onOpenFinding(finding);
+                      setNotificationsOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 border-b border-slate-800/70 hover:bg-slate-800 ${alert.read ? 'opacity-60' : ''}`}
+                  >
+                    <span className="text-[11px] text-rose-300 font-bold">{alert.escalated ? 'ESCALATED · ' : ''}{alert.severity.toUpperCase()} · {alert.score}/100</span>
+                    <span className="block mt-1 text-xs text-slate-200">{finding?.candidateName || alert.detectionId}</span>
+                    <span className="block mt-1 text-[10px] text-slate-500">{new Date(alert.createdAt).toLocaleString()}</span>
+                  </button>
+                );
+              }) : <p className="p-4 text-xs text-slate-400">No high-risk alerts.</p>}
             </div>
-            <button
-              onClick={() => onSwitchUser('analyst')}
-              className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-slate-800 ${
-                currentUser.role === 'analyst' ? 'text-cyan-400 font-semibold' : 'text-slate-300'
-              }`}
-            >
-              <span>Sarah Chen (Analyst)</span>
-              {currentUser.role === 'analyst' && <span className="text-[10px]">Active</span>}
-            </button>
-            <button
-              onClick={() => onSwitchUser('admin')}
-              className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-slate-800 ${
-                currentUser.role === 'admin' ? 'text-cyan-400 font-semibold' : 'text-slate-300'
-              }`}
-            >
-              <span>Marcus Vance (Admin)</span>
-              {currentUser.role === 'admin' && <span className="text-[10px]">Active</span>}
-            </button>
-            <button
-              onClick={() => onSwitchUser('viewer')}
-              className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-slate-800 ${
-                currentUser.role === 'viewer' ? 'text-cyan-400 font-semibold' : 'text-slate-300'
-              }`}
-            >
-              <span>David Mercer (Viewer)</span>
-              {currentUser.role === 'viewer' && <span className="text-[10px]">Active</span>}
-            </button>
-          </div>
+          )}
         </div>
+        <div className="hidden sm:block text-right">
+          <div className="text-xs font-semibold text-slate-200">{currentUser.name}</div>
+          <div className="text-[10px] text-slate-400 capitalize">{currentUser.role}</div>
+        </div>
+        <button onClick={onLogout} className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" aria-label="Log out">
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </header>
   );

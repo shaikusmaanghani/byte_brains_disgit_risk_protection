@@ -35,6 +35,7 @@ export const ThreatFindings: React.FC<ThreatFindingsProps> = ({
 
   // Client-side filtering & sorting
   const filtered = findings.filter((f) => {
+    if (statusFilter === 'all' && ['resolved', 'dismissed', 'false_positive'].includes(f.status)) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       const matchName = f.candidateName.toLowerCase().includes(q);
@@ -51,7 +52,7 @@ export const ThreatFindings: React.FC<ThreatFindingsProps> = ({
   });
 
   filtered.sort((a, b) => {
-    if (sortBy === 'risk_desc') return b.riskScore - a.riskScore;
+    if (sortBy === 'risk_desc') return b.riskScore - a.riskScore || new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
     if (sortBy === 'risk_asc') return a.riskScore - b.riskScore;
     if (sortBy === 'newest') return new Date(b.firstSeen).getTime() - new Date(a.firstSeen).getTime();
     if (sortBy === 'oldest') return new Date(a.firstSeen).getTime() - new Date(b.firstSeen).getTime();
@@ -80,6 +81,18 @@ export const ThreatFindings: React.FC<ThreatFindingsProps> = ({
     a.download = `sentinel_findings_${Date.now()}.csv`;
     a.click();
   };
+
+  const summaryCards: Array<{ label: string; count: number; color: string }> = [
+    { label: 'Open detections', count: findings.filter((item) => !['resolved', 'dismissed', 'false_positive'].includes(item.status)).length, color: 'text-cyan-300' },
+    { label: 'New', count: findings.filter((item) => item.status === 'new').length, color: 'text-blue-300' },
+    { label: 'Under review', count: findings.filter((item) => item.status === 'investigating').length, color: 'text-amber-300' },
+    { label: 'Confirmed', count: findings.filter((item) => item.status === 'confirmed_threat').length, color: 'text-rose-300' },
+    { label: 'Critical severity', count: findings.filter((item) => item.riskLevel === 'critical').length, color: 'text-rose-300' },
+    { label: 'High severity', count: findings.filter((item) => item.riskLevel === 'high').length, color: 'text-orange-300' },
+    { label: 'Medium severity', count: findings.filter((item) => item.riskLevel === 'medium').length, color: 'text-amber-300' },
+    { label: 'Low severity', count: findings.filter((item) => item.riskLevel === 'low').length, color: 'text-cyan-300' },
+    { label: 'Open high-risk', count: findings.filter((item) => item.riskScore >= 75 && !['resolved', 'dismissed', 'false_positive'].includes(item.status)).length, color: 'text-orange-300' },
+  ];
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -114,6 +127,16 @@ export const ThreatFindings: React.FC<ThreatFindingsProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Filter and Search Bar */}
+      <section aria-label="Investigation summary" className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
+        {summaryCards.map(({ label, count, color }) => (
+          <div key={label} className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+            <div className={`mt-1 text-xl font-bold ${color}`}>{count}</div>
+          </div>
+        ))}
+      </section>
 
       {/* Filter and Search Bar */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">

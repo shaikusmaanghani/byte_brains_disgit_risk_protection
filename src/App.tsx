@@ -3,7 +3,7 @@
  * Production Cyber Security Operations Center (SOC) Application
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { Sidebar, PageId } from './components/Sidebar';
 import { ThreatDetailModal } from './components/ThreatDetailModal';
@@ -22,6 +22,8 @@ import { DataSourcesPage } from './pages/DataSourcesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { SystemHealthPage } from './pages/SystemHealthPage';
+import { DemoLoginPage } from './pages/DemoLoginPage';
+import { AnalystChatPanel } from './components/AnalystChatPanel';
 
 import { apiClient } from './services/apiClient';
 import {
@@ -33,17 +35,12 @@ import {
   FindingStatus,
   ThreatGraphNode,
   ThreatGraphLink,
+  DetectionAlert,
 } from './types';
 
 export default function App() {
   const [activePage, setActivePage] = useState<PageId>('dashboard');
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 'usr-analyst-1',
-    name: 'Sarah Chen',
-    email: 'sarah.chen@sentinelshield.io',
-    role: 'analyst',
-    department: 'SOC Tier 2 Cyber Investigations',
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [brand, setBrand] = useState<BrandProfile | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -55,6 +52,11 @@ export default function App() {
   });
   const [overview, setOverview] = useState<any>(null);
   const [trends, setTrends] = useState<any>(null);
+  const [alerts, setAlerts] = useState<DetectionAlert[]>([]);
+  const [alertToast, setAlertToast] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const knownAlertIds = useRef<Set<string>>(new Set());
+  const hasLoadedAlerts = useRef(false);
 
   // Modals & Active state
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
@@ -63,6 +65,7 @@ export default function App() {
 
   const loadAllData = async () => {
     try {
+      setLoadError('');
       const [
         profileRes,
         findingsRes,
@@ -71,6 +74,7 @@ export default function App() {
         overviewRes,
         trendsRes,
         graphRes,
+        alertsRes,
       ] = await Promise.all([
         apiClient.getProfile(),
         apiClient.getFindings(),
@@ -79,6 +83,7 @@ export default function App() {
         apiClient.getAnalyticsOverview(),
         apiClient.getAnalyticsTrends(),
         apiClient.getThreatGraph(),
+        apiClient.getAlerts(),
       ]);
 
       setBrand(profileRes);
@@ -88,42 +93,69 @@ export default function App() {
       setOverview(overviewRes);
       setTrends(trendsRes);
       setThreatGraph(graphRes);
+      if (hasLoadedAlerts.current) {
+        const newAlerts = alertsRes.filter((alert) => !knownAlertIds.current.has(alert.id));
+        if (newAlerts.length) {
+          setAlertToast(`${newAlerts.length} new high-risk alert${newAlerts.length === 1 ? '' : 's'} created.`);
+          window.setTimeout(() => setAlertToast(''), 5000);
+        }
+      }
+      knownAlertIds.current = new Set(alertsRes.map((alert) => alert.id));
+      hasLoadedAlerts.current = true;
+      setAlerts(alertsRes);
     } catch (err) {
       console.error('Failed to load initial data:', err);
+      setLoadError(err instanceof Error ? err.message : 'Could not load investigation data.');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAllData();
+    if (!sessionStorage.getItem('sentinel-token')) {
+      setIsLoading(false);
+      return;
+    }
+    apiClient.getCurrentUser()
+      .then((user) => {
+        setCurrentUser(user);
+        return loadAllData();
+      })
+      .catch(() => {
+        sessionStorage.removeItem('sentinel-token');
+        setIsLoading(false);
+      });
   }, []);
 
-  const handleSwitchUser = async (role: 'admin' | 'analyst' | 'viewer') => {
-    const email =
-      role === 'admin'
-        ? 'admin@sentinelshield.io'
-        : role === 'viewer'
-        ? 'viewer@sentinelshield.io'
-        : 'sarah.chen@sentinelshield.io';
+  const handleLogin = async (user: User) => {
+    setIsLoading(true);
+    setCurrentUser(user);
+    await loadAllData();
+  };
+
+  const handleLogout = async () => {
     try {
-      const auth = await apiClient.login(email);
-      setCurrentUser(auth.user);
-    } catch (e) {
-      console.error(e);
+      await apiClient.logout();
+    } finally {
+      setCurrentUser(null);
+      setBrand(null);
+      setFindings([]);
+      setAlerts([]);
+      setIsLoading(false);
     }
   };
 
-  const handleUpdateStatus = async (id: string, status: FindingStatus) => {
+  const handleUpdateStatus = async (id: string, status: FindingStatus, reason = `Analyst decision: ${status.replace(/_/g, ' ')}.`) => {
     try {
-      const updated = await apiClient.updateFinding(id, {
-        status,
-        newNote: {
-          content: `Analyst changed incident status to ${status.replace(/_/g, ' ')}.`,
-          actionTaken: `Status set to ${status}`,
-          authorName: currentUser.name,
-        },
-      });
+      const statusMap: Record<FindingStatus, import('./types').InvestigationStatus> = {
+        new: 'New',
+        investigating: 'Under Review',
+        confirmed_threat: 'Confirmed',
+        false_positive: 'False Positive',
+        resolved: 'Closed',
+        dismissed: 'Closed',
+      };
+      const updated = await apiClient.transitionFinding(id, statusMap[status], reason);
       setFindings((prev) => prev.map((f) => (f.id === id ? updated : f)));
       if (selectedFinding?.id === id) {
         setSelectedFinding(updated);
@@ -132,6 +164,7 @@ export default function App() {
       apiClient.getAnalyticsOverview().then(setOverview);
     } catch (err) {
       console.error('Status update failed:', err);
+      throw err;
     }
   };
 
@@ -141,7 +174,6 @@ export default function App() {
         newNote: {
           content,
           actionTaken,
-          authorName: currentUser.name,
         },
       });
       setFindings((prev) => prev.map((f) => (f.id === id ? updated : f)));
@@ -165,6 +197,24 @@ export default function App() {
     }
   };
 
+  const handleReadAlert = async (alert: DetectionAlert) => {
+    if (alert.read) return;
+    try {
+      const updated = await apiClient.markAlertRead(alert.id);
+      setAlerts((previous) => previous.map((item) => item.id === updated.id ? updated : item));
+    } catch (error) {
+      console.error('Failed to mark alert as read:', error);
+    }
+  };
+
+  const handleDraftReport = async (id: string) => {
+    const report = await apiClient.draftTakedownReport(id);
+    const updated = await apiClient.getFindingById(id);
+    setFindings((previous) => previous.map((item) => item.id === id ? updated : item));
+    setSelectedFinding(updated);
+    return report;
+  };
+
   const handleUpdateBrand = async (updates: Partial<BrandProfile>) => {
     const updated = await apiClient.updateProfile(updates);
     setBrand(updated);
@@ -176,7 +226,21 @@ export default function App() {
     setWatchlists((prev) => [...prev, created]);
   };
 
-  if (isLoading || !brand) {
+  if (!isLoading && !currentUser) return <DemoLoginPage onLogin={handleLogin} />;
+
+  if (loadError && !isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+        <div className="max-w-md rounded-xl border border-rose-500/30 bg-slate-900 p-6">
+          <h1 className="text-lg font-bold">Unable to load workspace</h1>
+          <p role="alert" className="mt-2 text-sm text-rose-200">{loadError}</p>
+          <button onClick={() => void loadAllData()} className="mt-4 rounded bg-cyan-600 px-4 py-2 text-sm font-semibold">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !brand || !currentUser) {
     return (
       <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
         <div className="w-10 h-10 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
@@ -198,7 +262,11 @@ export default function App() {
       {/* Top Header */}
       <Header
         currentUser={currentUser}
-        onSwitchUser={handleSwitchUser}
+        alerts={alerts}
+        findings={findings}
+        onLogout={handleLogout}
+        onReadAlert={handleReadAlert}
+        onOpenFinding={(finding) => setSelectedFinding(finding)}
         onRunScan={() => setIsScanningModalOpen(true)}
         isScanning={isScanningModalOpen}
         overallThreatLevel={overview?.overallThreatLevel || 'High'}
@@ -330,6 +398,7 @@ export default function App() {
           onUpdateStatus={handleUpdateStatus}
           onAddNote={handleAddNote}
           onAssignAnalyst={handleAssignAnalyst}
+          onDraftReport={handleDraftReport}
         />
       )}
 
@@ -339,6 +408,12 @@ export default function App() {
         onClose={() => setIsScanningModalOpen(false)}
         onScanCompleted={loadAllData}
       />
+      <AnalystChatPanel />
+      {alertToast && (
+        <div role="status" className="fixed top-20 right-5 z-50 rounded-lg border border-rose-500/40 bg-rose-950 px-4 py-3 text-xs font-semibold text-rose-100 shadow-xl">
+          {alertToast}
+        </div>
+      )}
     </div>
   );
 }

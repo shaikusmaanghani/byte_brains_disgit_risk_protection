@@ -12,6 +12,10 @@ import type {
   ThreatGraphNode,
   ThreatGraphLink,
 } from '../src/types/index.js';
+import { answerAnalystQuestion, getDetection } from '../src/services/analystAssistant.js';
+import { draftTakedownReport } from '../src/services/takedownReport.js';
+import { appendHistory, transitionFinding } from '../src/services/investigation.js';
+import { AuthenticatedRequest, createDemoSession, requireSession, revokeSession } from './auth.js';
 export const apiRouter = Router();
 
 // Middleware: Basic request logger & header check
@@ -35,18 +39,30 @@ apiRouter.get('/health', (req: Request, res: Response) => {
 
 // POST /api/auth/login
 apiRouter.post('/auth/login', (req: Request, res: Response) => {
-  const { email } = req.body;
-  const users = db.getUsers();
-  const matchedUser = users.find(
-    (u) => u.email.toLowerCase() === (email || '').toLowerCase()
-  ) || users[1]; // default to Sarah Chen (Analyst) if not found or demo login
-
-  res.json({
-    token: `jwt_sentinel_${matchedUser.id}_${Date.now()}`,
-    user: matchedUser,
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  });
+  const { email, password } = req.body as { email?: string; password?: string };
+  if (!email || !password) {
+    res.status(400).json({ error: 'Email and password are required.' });
+    return;
+  }
+  const session = createDemoSession(email, password, db.getUsers());
+  if (!session) {
+    res.status(401).json({ error: 'Invalid demo credentials.' });
+    return;
+  }
+  res.json(session);
 });
+
+apiRouter.get('/auth/me', requireSession, (req: Request, res: Response) => {
+  res.json((req as AuthenticatedRequest).user);
+});
+
+apiRouter.post('/auth/logout', requireSession, (req: Request, res: Response) => {
+  const token = (req as AuthenticatedRequest).sessionToken;
+  if (token) revokeSession(token);
+  res.json({ success: true });
+});
+
+apiRouter.use(requireSession);
 
 // GET /api/profile
 apiRouter.get('/profile', (req: Request, res: Response) => {
@@ -77,7 +93,6 @@ apiRouter.get('/apps/findings', (req: Request, res: Response) => {
 apiRouter.get('/findings', (req: Request, res: Response) => {
   let list = db.getFindings();
   const { search, platform, assetType, risk, status, sort } = req.query;
-
   if (search && typeof search === 'string') {
     const q = search.toLowerCase();
     list = list.filter(
@@ -113,7 +128,7 @@ apiRouter.get('/findings', (req: Request, res: Response) => {
     list.sort((a, b) => new Date(b.firstSeen).getTime() - new Date(a.firstSeen).getTime());
   } else {
     // default: highest risk first
-    list.sort((a, b) => b.riskScore - a.riskScore);
+    list.sort((a, b) => b.riskScore - a.riskScore || new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
   }
 
   res.json(list);
@@ -142,8 +157,17 @@ apiRouter.post('/findings', (req: Request, res: Response) => {
     analysis = analyzeSocialCandidate(candidate, brand);
   }
 
+  if (analysis.isOfficialAsset) {
+    res.status(200).json({
+      officialExcluded: true,
+      message: 'Official asset excluded from threat findings.',
+      analysis,
+    });
+    return;
+  }
+
   const newFinding: Finding = {
-    id: `find-man-${Date.now()}`,
+    id: `find-man-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     brandId: brand.id,
     assetType: isApp ? 'mobile_application' : 'social_profile',
     platform: candidate.platform || (isApp ? 'google_play' : 'x_twitter'),
@@ -167,6 +191,16 @@ apiRouter.post('/findings', (req: Request, res: Response) => {
     matchedOfficialAsset: analysis.matchedOfficialAsset,
     candidatePayload: candidate,
     isSimulated: false,
+    investigationStatus: 'New',
+    scoreBreakdown: analysis.scoreBreakdown || {},
+    history: [{
+      timestamp: new Date().toISOString(),
+      actor: (req as AuthenticatedRequest).user?.name || 'System',
+      action: 'Detection created',
+      toStatus: 'New',
+      note: 'Candidate evaluated by the deterministic scoring engine.',
+    }],
+    isOfficialAsset: false,
   };
 
   const saved = db.addFinding(newFinding);
@@ -181,23 +215,127 @@ apiRouter.patch('/findings/:id', (req: Request, res: Response) => {
     return;
   }
 
-  const updates = req.body;
+  const actor = (req as AuthenticatedRequest).user?.name || 'Analyst';
+  const updates: Record<string, any> = {};
+  if (typeof req.body?.assignedAnalyst === 'string') updates.assignedAnalyst = req.body.assignedAnalyst;
+  if (typeof req.body?.status === 'string') updates.status = req.body.status;
+  if (req.body?.newNote && typeof req.body.newNote.content === 'string') updates.newNote = req.body.newNote;
+  let nextFinding = existing;
+  const legacyToInvestigation: Record<string, import('../src/types/index.js').InvestigationStatus> = {
+    new: 'New',
+    investigating: 'Under Review',
+    confirmed_threat: 'Confirmed',
+    false_positive: 'False Positive',
+    resolved: 'Closed',
+    dismissed: 'Closed',
+  };
+  if (updates.status && updates.status !== existing.status) {
+    const nextStatus = legacyToInvestigation[updates.status];
+    if (!nextStatus) {
+      res.status(400).json({ error: 'Unsupported investigation status.' });
+      return;
+    }
+    try {
+      nextFinding = transitionFinding(
+        existing,
+        nextStatus,
+        actor,
+        updates.newNote?.content || `Status changed to ${nextStatus}.`,
+      );
+    } catch (error) {
+      res.status(409).json({ error: error instanceof Error ? error.message : 'Invalid status transition.' });
+      return;
+    }
+    delete updates.status;
+  }
   // If notes added
   if (updates.newNote) {
     const note = {
       id: `note-${Date.now()}`,
-      authorName: updates.newNote.authorName || 'Sarah Chen',
-      authorEmail: updates.newNote.authorEmail || 'sarah.chen@sentinelshield.io',
+      authorName: actor,
+      authorEmail: (req as AuthenticatedRequest).user?.email || '',
       createdAt: new Date().toISOString(),
       content: updates.newNote.content,
       actionTaken: updates.newNote.actionTaken,
     };
-    updates.notes = [...(existing.notes || []), note];
+    updates.notes = [...(nextFinding.notes || []), note];
+    nextFinding = appendHistory(
+      nextFinding,
+      actor,
+      'Analyst note added',
+      updates.newNote.content,
+    );
     delete updates.newNote;
   }
 
-  const updated = db.updateFinding(req.params.id, updates);
+  const updated = db.updateFinding(req.params.id, { ...nextFinding, ...updates });
   res.json(updated);
+});
+
+apiRouter.post('/findings/:id/investigate', (req: Request, res: Response) => {
+  const finding = db.getFindingById(req.params.id);
+  if (!finding) {
+    res.status(404).json({ error: 'Finding not found.' });
+    return;
+  }
+  const { status, note } = req.body as { status?: import('../src/types/index.js').InvestigationStatus; note?: string };
+  if (!status || !note?.trim()) {
+    res.status(400).json({ error: 'A valid target status and reason are required.' });
+    return;
+  }
+  try {
+    const updated = transitionFinding(finding, status, (req as AuthenticatedRequest).user!.name, note);
+    res.json(db.updateFinding(finding.id, updated));
+  } catch (error) {
+    res.status(409).json({ error: error instanceof Error ? error.message : 'Invalid status transition.' });
+  }
+});
+
+apiRouter.post('/findings/:id/report', (req: Request, res: Response) => {
+  const finding = db.getFindingById(req.params.id);
+  if (!finding) {
+    res.status(404).json({ error: 'Finding not found.' });
+    return;
+  }
+  try {
+    const actor = (req as AuthenticatedRequest).user!.name;
+    const report = draftTakedownReport(finding, actor);
+    db.updateFinding(finding.id, appendHistory(finding, actor, 'Report drafted', 'Draft takedown report generated.'));
+    res.json({ report });
+  } catch (error) {
+    res.status(409).json({ error: error instanceof Error ? error.message : 'Could not draft report.' });
+  }
+});
+
+apiRouter.get('/alerts', (req: Request, res: Response) => {
+  res.json(db.getAlerts());
+});
+
+apiRouter.post('/alerts/:id/read', (req: Request, res: Response) => {
+  const alert = db.markAlertRead(req.params.id);
+  if (!alert) {
+    res.status(404).json({ error: 'Alert not found.' });
+    return;
+  }
+  res.json(alert);
+});
+
+apiRouter.post('/assistant/chat', (req: Request, res: Response) => {
+  const question = typeof req.body?.question === 'string' ? req.body.question.trim() : '';
+  if (!question) {
+    res.status(400).json({ error: 'A question is required.' });
+    return;
+  }
+  const findings = db.getFindings();
+  const actor = (req as AuthenticatedRequest).user!.name;
+  const answer = answerAnalystQuestion(question, findings, actor);
+  if (/draft|takedown/i.test(question) && answer.startsWith('# Platform review request')) {
+    const finding = getDetection(findings, question);
+    if (finding) {
+      db.updateFinding(finding.id, appendHistory(finding, actor, 'Report drafted', 'Draft takedown report generated via the offline assistant.'));
+    }
+  }
+  res.json({ answer });
 });
 
 // DELETE /api/findings/:id

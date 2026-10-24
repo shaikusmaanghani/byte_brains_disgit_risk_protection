@@ -1,14 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import type {
+  AppCandidateInput,
   BrandProfile,
   Finding,
   MonitoringSource,
   WatchlistRule,
   User,
   SystemHealthReport,
+  DetectionAlert,
+  SocialCandidateInput,
 } from '../src/types/index.js';
 import { analyzeMobileApp, analyzeSocialCandidate } from '../src/services/detectionEngine.js';
+import { alertForFinding, investigationStatus } from '../src/services/investigation.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'sentinel_db.json');
@@ -21,6 +25,97 @@ export interface DatabaseSchema {
   watchlists: WatchlistRule[];
   lastScanTime: string;
   totalScansCount: number;
+  alerts: DetectionAlert[];
+}
+
+function hydrateFinding(finding: Finding, brand: BrandProfile): Finding {
+  const payload = finding.candidatePayload || {};
+  const official = finding.matchedOfficialAsset;
+  const officialName = official && 'appName' in official
+    ? official.appName
+    : official && 'profileName' in official
+      ? official.profileName
+      : 'Acme Financial';
+  const assetType = finding.assetType === 'mobile_application' ? 'app' : 'profile';
+  const firstSeen = finding.firstSeen || new Date().toISOString();
+  const signals = finding.signals || [];
+  return {
+    ...finding,
+    investigationStatus: finding.investigationStatus || investigationStatus(finding),
+    scoreBreakdown: finding.scoreBreakdown || signals.reduce<Record<string, number>>((result, signal) => {
+      result[signal.type] = (result[signal.type] || 0) + signal.score;
+      return result;
+    }, {}),
+    history: finding.history?.length ? finding.history : [{
+      timestamp: firstSeen,
+      actor: finding.isSimulated ? 'Demo seed' : 'System',
+      action: 'Detection recorded',
+      toStatus: finding.investigationStatus || investigationStatus(finding),
+      note: finding.isSimulated ? 'Clearly labelled simulated demonstration record.' : 'Imported from the existing Round 1 finding store.',
+    }],
+    isOfficialAsset: finding.isOfficialAsset || false,
+    source: finding.source || {
+      platform: finding.platform,
+      url: finding.url,
+      identifier: finding.identifier,
+      discovered_at: firstSeen,
+    },
+    suspectedAsset: finding.suspectedAsset || {
+      type: assetType,
+      name: finding.candidateName,
+      handle: finding.assetType === 'social_profile' ? finding.identifier : undefined,
+      publisherOrDeveloper: finding.publisherOrDeveloper,
+      description: finding.descriptionSnippet,
+      logo_ref: payload.iconUrl || payload.avatarUrl || finding.iconUrl,
+    },
+    imitates: finding.imitates || {
+      official_asset_id: official?.id,
+      official_asset_name: officialName,
+    },
+    evidence: finding.evidence || signals.map((signal) => ({
+      signal: signal.type,
+      weight: signal.weight,
+      points_contributed: signal.pointsContributed ?? signal.score,
+      reason: signal.reason || signal.explanation,
+    })),
+    officialAssetDetails: finding.officialAssetDetails || {
+      name: officialName,
+      publisherOrDeveloper: official && 'publisher' in official
+        ? official.publisher
+        : official && 'handle' in official
+          ? `@${official.handle}`
+          : brand.knownPublishers[0],
+      description: brand.companyDescription,
+      logoRef: official && 'iconUrl' in official
+        ? official.iconUrl || brand.logoUrl
+        : official && 'avatarUrl' in official
+          ? official.avatarUrl || brand.logoUrl
+          : brand.logoUrl,
+    },
+  };
+}
+
+function rescoreLegacyFinding(finding: Finding, brand: BrandProfile): Finding | null {
+  if (finding.scoreBreakdown || !finding.candidatePayload) return hydrateFinding(finding, brand);
+  const candidate = finding.candidatePayload;
+  const analysis = finding.assetType === 'mobile_application'
+    ? analyzeMobileApp(candidate as AppCandidateInput, brand)
+    : analyzeSocialCandidate(candidate as SocialCandidateInput, brand);
+  if (analysis.isOfficialAsset) return null;
+  return hydrateFinding({
+    ...finding,
+    riskScore: analysis.riskScore,
+    riskLevel: analysis.riskLevel,
+    classification: analysis.classification,
+    confidence: analysis.confidence,
+    signals: analysis.signals,
+    radarBreakdown: analysis.radarBreakdown,
+    recommendedAction: analysis.recommendedAction,
+    summaryExplanation: analysis.summaryExplanation,
+    matchedOfficialAsset: analysis.matchedOfficialAsset,
+    scoreBreakdown: analysis.scoreBreakdown || {},
+    evidence: undefined,
+  }, brand);
 }
 
 const DEFAULT_BRAND: BrandProfile = {
@@ -114,10 +209,17 @@ const DEFAULT_USERS: User[] = [
   },
   {
     id: 'usr-analyst-1',
-    name: 'Sarah Chen',
-    email: 'sarah.chen@sentinelshield.io',
+    name: 'Analyst One',
+    email: 'analyst1@sentinelshield.demo',
     role: 'analyst',
     department: 'SOC Tier 2 Cyber Investigations',
+  },
+  {
+    id: 'usr-analyst-2',
+    name: 'Analyst Two',
+    email: 'analyst2@sentinelshield.demo',
+    role: 'analyst',
+    department: 'SOC Tier 1 Investigations',
   },
   {
     id: 'usr-viewer-1',
@@ -561,7 +663,22 @@ class SentinelDatabase {
       }
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        return JSON.parse(raw);
+        const loaded = JSON.parse(raw) as Partial<DatabaseSchema>;
+        const brand = loaded.brand || DEFAULT_BRAND;
+        const findings = (loaded.findings || [])
+          .map((finding) => rescoreLegacyFinding(finding, brand))
+          .filter((finding): finding is Finding => finding !== null);
+        return {
+          ...loaded,
+          brand,
+          users: DEFAULT_USERS,
+          findings,
+          sources: loaded.sources || DEFAULT_SOURCES,
+          watchlists: loaded.watchlists || DEFAULT_WATCHLISTS,
+          alerts: loaded.alerts || [],
+          lastScanTime: loaded.lastScanTime || new Date().toISOString(),
+          totalScansCount: loaded.totalScansCount || 0,
+        } as DatabaseSchema;
       }
     } catch (err) {
       console.warn('Failed to load existing DB file, creating fresh default:', err);
@@ -578,6 +695,7 @@ class SentinelDatabase {
       watchlists: DEFAULT_WATCHLISTS,
       lastScanTime: '2026-10-08T11:28:00Z',
       totalScansCount: 42,
+      alerts: [],
     };
 
     this.persist(schema);
@@ -625,16 +743,47 @@ class SentinelDatabase {
     // Check if finding with same identifier already exists
     const idx = this.data.findings.findIndex((f) => f.identifier === finding.identifier && f.platform === finding.platform);
     if (idx >= 0) {
-      this.data.findings[idx] = {
-        ...this.data.findings[idx],
+      const previous = this.data.findings[idx];
+      const previousStatus = investigationStatus(previous);
+      this.data.findings[idx] = hydrateFinding({
+        ...previous,
         ...finding,
-        id: this.data.findings[idx].id,
+        id: previous.id,
+        firstSeen: previous.firstSeen,
         lastSeen: new Date().toISOString(),
-      };
+        status: previous.status,
+        notes: previous.notes || [],
+        assignedAnalyst: finding.assignedAnalyst || previous.assignedAnalyst,
+        investigationStatus: previous.investigationStatus || previousStatus,
+        history: [
+          ...(previous.history || []),
+          {
+            timestamp: new Date().toISOString(),
+            actor: 'Detection engine',
+            action: 'Detection rescanned',
+            fromStatus: previousStatus,
+            toStatus: previousStatus,
+            note: `Score updated from ${previous.riskScore} to ${finding.riskScore}.`,
+          },
+        ],
+      }, this.data.brand);
+      const alert = alertForFinding(
+        this.data.findings[idx],
+        this.data.alerts,
+        `alert-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      );
+      if (alert) this.data.alerts.unshift(alert);
       this.persist(this.data);
       return this.data.findings[idx];
     } else {
+      finding = hydrateFinding(finding, this.data.brand);
       this.data.findings.unshift(finding);
+      const alert = alertForFinding(
+        finding,
+        this.data.alerts,
+        `alert-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      );
+      if (alert) this.data.alerts.unshift(alert);
       this.persist(this.data);
       return finding;
     }
@@ -651,6 +800,18 @@ class SentinelDatabase {
     };
     this.persist(this.data);
     return this.data.findings[idx];
+  }
+
+  public getAlerts(): DetectionAlert[] {
+    return this.data.alerts;
+  }
+
+  public markAlertRead(id: string): DetectionAlert | null {
+    const alert = this.data.alerts.find((item) => item.id === id);
+    if (!alert) return null;
+    alert.read = true;
+    this.persist(this.data);
+    return alert;
   }
 
   public deleteFinding(id: string): boolean {

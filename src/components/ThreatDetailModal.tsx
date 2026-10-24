@@ -21,9 +21,10 @@ import { RadarChart } from './RadarChart';
 interface ThreatDetailModalProps {
   finding: Finding;
   onClose: () => void;
-  onUpdateStatus: (id: string, status: FindingStatus) => void;
+  onUpdateStatus: (id: string, status: FindingStatus, reason?: string) => Promise<void>;
   onAddNote: (id: string, noteContent: string, actionTaken?: string) => void;
   onAssignAnalyst: (id: string, analystName: string) => void;
+  onDraftReport: (id: string) => Promise<string>;
 }
 
 export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
@@ -32,8 +33,13 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
   onUpdateStatus,
   onAddNote,
   onAssignAnalyst,
+  onDraftReport,
 }) => {
   const [newNote, setNewNote] = useState('');
+  const [statusReason, setStatusReason] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [reportText, setReportText] = useState('');
+  const [reportError, setReportError] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<FindingStatus>(finding.status);
   const [analystName, setAnalystName] = useState(finding.assignedAnalyst || 'Sarah Chen');
 
@@ -46,9 +52,37 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
     { value: 'dismissed', label: 'Dismissed', color: 'bg-slate-700/30 text-slate-400 border-slate-700/50' },
   ];
 
-  const handleStatusChange = (status: FindingStatus) => {
+  const handleStatusChange = async (status: FindingStatus) => {
+    if (!statusReason.trim()) {
+      setActionError('Enter a reason before recording an investigation action.');
+      return;
+    }
     setSelectedStatus(status);
-    onUpdateStatus(finding.id, status);
+    setActionError('');
+    try {
+      await onUpdateStatus(finding.id, status, statusReason.trim());
+      setStatusReason('');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not update investigation status.');
+    }
+  };
+
+  const draftReport = async () => {
+    try {
+      setReportError('');
+      setReportText(await onDraftReport(finding.id));
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : 'Could not draft takedown report.');
+    }
+  };
+
+  const downloadReport = (extension: 'md' | 'txt') => {
+    const url = URL.createObjectURL(new Blob([reportText], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${finding.id}-takedown.${extension}`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleAddNoteSubmit = (e: React.FormEvent) => {
@@ -60,6 +94,17 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
 
   const matchedApp = finding.matchedOfficialAsset as OfficialApp | undefined;
   const isApp = finding.assetType === 'mobile_application';
+  const officialDetails = finding.officialAssetDetails;
+  const matchingWords = new Set(
+    (officialDetails?.description || '')
+      .toLowerCase()
+      .match(/[a-z0-9]{4,}/g) || [],
+  );
+  const renderHighlightedDescription = (text: string) => text.split(/(\b[a-z0-9]{4,}\b)/gi).map((part, index) =>
+    matchingWords.has(part.toLowerCase())
+      ? <mark key={`${part}-${index}`} className="rounded bg-amber-400/20 text-amber-100">{part}</mark>
+      : part,
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
@@ -152,6 +197,16 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                   </button>
                 ))}
               </div>
+              <label className="block mt-3 text-[11px] text-slate-400">
+                Action reason (required)
+                <input
+                  value={statusReason}
+                  onChange={(event) => setStatusReason(event.target.value)}
+                  className="mt-1 block w-full min-w-64 rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  placeholder="Record the evidence or rationale for this action"
+                />
+              </label>
+              {actionError && <p role="alert" className="text-[11px] text-rose-300 mt-2">{actionError}</p>}
             </div>
 
             <div className="flex items-center gap-3">
@@ -225,10 +280,11 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                     <div>
                       <span className="text-slate-400 block text-[11px]">Description Snippet:</span>
                       <p className="text-slate-300 bg-slate-950/60 p-2 rounded border border-rose-500/20 text-[11px] leading-relaxed">
-                        {finding.descriptionSnippet}
+                        {renderHighlightedDescription(finding.descriptionSnippet)}
                       </p>
                     </div>
                   )}
+                  {finding.iconUrl && <img src={finding.iconUrl} alt={`${finding.candidateName} logo`} className="h-12 w-12 rounded border border-slate-700 object-cover" />}
                 </div>
               </div>
 
@@ -246,13 +302,13 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                   <div>
                     <span className="text-slate-400 block text-[11px]">Official App / Brand Name:</span>
                     <span className="font-semibold text-white font-mono">
-                      {matchedApp ? matchedApp.appName : 'Acme Financial Mobile'}
+                      {officialDetails?.name || (matchedApp ? matchedApp.appName : 'Acme Financial')}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Authorized Publisher:</span>
                     <span className="font-semibold text-emerald-300 font-mono">
-                      {matchedApp ? matchedApp.publisher : 'Acme Financial Technologies LLC'}
+                      {officialDetails?.publisherOrDeveloper || matchedApp?.publisher || 'Not registered'}
                     </span>
                   </div>
                   <div>
@@ -267,6 +323,15 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                       acmefinancial.com, acmebank.com
                     </span>
                   </div>
+                  {officialDetails?.logoRef && <img src={officialDetails.logoRef} alt="Official brand logo" className="h-12 w-12 rounded border border-emerald-700 object-cover" />}
+                  {officialDetails?.description && (
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Registered description:</span>
+                      <p className="text-slate-300 bg-slate-950/60 p-2 rounded border border-emerald-500/20 text-[11px] leading-relaxed">
+                        {officialDetails.description}
+                      </p>
+                    </div>
+                  )}
                   <div className="p-2.5 rounded bg-emerald-950/40 border border-emerald-500/20 text-[11px] text-emerald-200">
                     <div className="font-semibold">Security Policy Verification:</div>
                     Publisher credentials are cryptographic prerequisites. Discrepancies represent unauthorized code distribution.
@@ -307,9 +372,10 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
                           {signal.type.replace(/_/g, ' ')}
                         </span>
                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                          +{signal.score} pts (wt: {signal.weight})
+                          +{signal.pointsContributed ?? signal.score} pts (wt: {signal.weight})
                         </span>
                       </div>
+
                       <p className="text-xs text-slate-300 leading-relaxed">{signal.explanation}</p>
                       {signal.highlightDetails && (
                         <div className="text-[11px] font-mono text-slate-400 mt-1 flex flex-wrap gap-2">
@@ -336,6 +402,43 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
               </div>
             </div>
           </div>
+
+          <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-300 mb-3">Investigation history</h3>
+            {(finding.history || []).length ? (
+              <ol className="space-y-3 border-l border-slate-700 ml-1 pl-4">
+                {(finding.history || []).map((entry, index) => (
+                  <li key={`${entry.timestamp}-${index}`} className="relative text-xs">
+                    <span className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-cyan-400" />
+                    <div className="text-slate-300 font-semibold">{entry.action} · {entry.actor}</div>
+                    <div className="text-[10px] text-slate-500">{new Date(entry.timestamp).toLocaleString()}</div>
+                    {entry.note && <p className="mt-1 text-slate-400">{entry.note}</p>}
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="text-xs text-slate-500">No audit events recorded yet.</p>}
+          </section>
+
+          {(finding.investigationStatus === 'Confirmed' || finding.status === 'confirmed_threat') && (
+            <section className="rounded-xl border border-cyan-700/50 bg-slate-950/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-cyan-200">Takedown report draft</h3>
+                <button onClick={draftReport} className="px-3 py-1.5 rounded bg-cyan-700 hover:bg-cyan-600 text-xs font-semibold text-white">Generate draft</button>
+              </div>
+              {reportError && <p role="alert" className="text-xs text-rose-300">{reportError}</p>}
+              {reportText && (
+                <>
+                  <textarea value={reportText} onChange={(event) => setReportText(event.target.value)} rows={12} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs text-slate-200 font-mono" aria-label="Editable takedown report" />
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => navigator.clipboard.writeText(reportText)} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-200">Copy</button>
+                    <button onClick={() => downloadReport('md')} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-200">Export .md</button>
+                    <button onClick={() => downloadReport('txt')} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-200">Export .txt</button>
+                    <button onClick={() => window.print()} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-200">Print / PDF</button>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
 
           {/* Investigation Notes & Timeline */}
           <div>
@@ -394,6 +497,14 @@ export const ThreatDetailModal: React.FC<ThreatDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {selectedStatus === 'new' && (
+              <button
+                onClick={() => handleStatusChange('investigating')}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-semibold"
+              >
+                Start Review
+              </button>
+            )}
             <button
               onClick={() => handleStatusChange('confirmed_threat')}
               className="px-3.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"

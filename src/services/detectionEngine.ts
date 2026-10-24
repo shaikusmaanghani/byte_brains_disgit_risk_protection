@@ -18,6 +18,7 @@ import type {
   RiskLevel,
   ThreatClassification,
 } from '../types/index.js';
+import { MAX_RISK_SCORE, SCORING_WEIGHTS, SEVERITY_THRESHOLDS } from './scoringConfig.js';
 // Homoglyphs mapping: Cyrillic / Greek / visual confusable characters to Latin base
 export const HOMOGLYPH_MAP: Record<string, string> = {
   // Cyrillic small look-alikes
@@ -68,6 +69,11 @@ const SUSPICIOUS_PHRASES = [
   'whatsapp support',
   'telegram support',
   'exclusive access',
+  'login',
+  'log in',
+  'sign in',
+  'password reset',
+  'enter password',
 ];
 
 const SUSPICIOUS_PERMISSIONS = [
@@ -80,6 +86,15 @@ const SUSPICIOUS_PERMISSIONS = [
   'android.permission.RECORD_AUDIO',
   'android.permission.ACCESS_BACKGROUND_LOCATION',
 ];
+
+function evidenceWithContributions(signals: DetectionSignal[]): DetectionSignal[] {
+  return signals.map((signal) => ({
+    ...signal,
+    signal: signal.signal || signal.type,
+    pointsContributed: signal.pointsContributed ?? signal.score,
+    reason: signal.reason || signal.explanation,
+  }));
+}
 
 /**
  * Detects visually confusable Unicode characters and converts to normalized Latin
@@ -184,11 +199,60 @@ export function damerauLevenshtein(s1: string, s2: string): number {
 export function stringSimilarity(s1: string, s2: string): number {
   if (!s1 && !s2) return 1;
   if (!s1 || !s2) return 0;
-  if (s1 === s2) return 1;
-  const maxLen = Math.max(s1.length, s2.length);
+  const left = normalizeComparisonString(s1);
+  const right = normalizeComparisonString(s2);
+  if (left === right) return 1;
+  const maxLen = Math.max(left.length, right.length);
   if (maxLen === 0) return 1;
-  const dist = damerauLevenshtein(s1, s2);
-  return Math.max(0, 1 - dist / maxLen);
+  const editSimilarity = Math.max(0, 1 - damerauLevenshtein(left, right) / maxLen);
+  const jaro = jaroWinklerSimilarity(left, right);
+  return editSimilarity * 0.7 + jaro * 0.3;
+}
+
+function normalizeComparisonString(value: string): string {
+  return detectAndNormalizeHomoglyphs(value)
+    .normalized
+    .toLowerCase()
+    .replace(/rn/g, 'm')
+    .replace(/(official|support|help|service)$/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+export function jaroWinklerSimilarity(left: string, right: string): number {
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const matchDistance = Math.max(Math.floor(Math.max(left.length, right.length) / 2) - 1, 0);
+  const leftMatches = new Array(left.length).fill(false);
+  const rightMatches = new Array(right.length).fill(false);
+  let matches = 0;
+  for (let i = 0; i < left.length; i++) {
+    const start = Math.max(0, i - matchDistance);
+    const end = Math.min(i + matchDistance + 1, right.length);
+    for (let j = start; j < end; j++) {
+      if (rightMatches[j] || left[i] !== right[j]) continue;
+      leftMatches[i] = true;
+      rightMatches[j] = true;
+      matches++;
+      break;
+    }
+  }
+  if (!matches) return 0;
+  let transpositions = 0;
+  let rightIndex = 0;
+  for (let i = 0; i < left.length; i++) {
+    if (!leftMatches[i]) continue;
+    while (!rightMatches[rightIndex]) rightIndex++;
+    if (left[i] !== right[rightIndex]) transpositions++;
+    rightIndex++;
+  }
+  const jaro = (
+    matches / left.length +
+    matches / right.length +
+    (matches - transpositions / 2) / matches
+  ) / 3;
+  let prefix = 0;
+  while (prefix < Math.min(4, left.length, right.length) && left[prefix] === right[prefix]) prefix++;
+  return jaro + prefix * 0.1 * (1 - jaro);
 }
 
 /**
@@ -225,15 +289,30 @@ export function tokenContainmentRatio(query: string, target: string): number {
 }
 
 /**
- * Deterministic perceptual-like hash comparison for logos
+ * Compare two 64-bit difference hashes (dHashes) produced by image ingestion.
  */
-export function computeLogoSimilarity(candidateLogoUrl?: string, officialLogoUrl?: string): number {
-  if (!candidateLogoUrl || !officialLogoUrl) return 0;
-  if (candidateLogoUrl === officialLogoUrl) return 1.0;
-  // If simulated/test logo tags match
-  if (candidateLogoUrl.includes('acme') && officialLogoUrl.includes('acme')) return 0.85;
-  if (candidateLogoUrl.includes('brand') && officialLogoUrl.includes('brand')) return 0.75;
-  return 0.15;
+export function computeLogoSimilarity(candidateHash?: string, officialHash?: string): number {
+  const distance = perceptualHashDistance(candidateHash, officialHash);
+  return distance === null ? 0 : 1 - distance / 64;
+}
+
+export function perceptualHashDistance(candidateHash?: string, officialHash?: string): number | null {
+  if (!candidateHash || !officialHash || !/^[\da-f]{16}$/i.test(candidateHash) || !/^[\da-f]{16}$/i.test(officialHash)) {
+    return null;
+  }
+  let differingBits = BigInt(`0x${candidateHash}`) ^ BigInt(`0x${officialHash}`);
+  let distance = 0;
+  while (differingBits) {
+    distance += Number(differingBits & 1n);
+    differingBits >>= 1n;
+  }
+  return distance;
+}
+
+function isRecentlyCreated(createdAt?: string): boolean {
+  if (!createdAt) return false;
+  const age = Date.now() - new Date(createdAt).getTime();
+  return Number.isFinite(age) && age >= 0 && age <= 14 * 24 * 60 * 60 * 1000;
 }
 
 /**
@@ -307,6 +386,7 @@ export function analyzeMobileApp(
       },
       recommendedAction: 'No action needed. Registered as legitimate official enterprise asset.',
       matchedOfficialAsset: exactOfficialMatch,
+      scoreBreakdown: {},
       summaryExplanation: 'Candidate application verified against registered enterprise official credentials.',
     };
   }
@@ -335,8 +415,8 @@ export function analyzeMobileApp(
   if (appNameHomoglyph.hasHomoglyphs) {
     signals.push({
       type: 'homoglyph_detected',
-      score: 15,
-      weight: 15,
+      score: SCORING_WEIGHTS.homoglyph,
+      weight: SCORING_WEIGHTS.homoglyph,
       explanation: `Potential homoglyph substitution detected: [${appNameHomoglyph.detectedChars.join(', ')}]. Attacker may be attempting visual spoofing.`,
       highlightDetails: {
         candidateValue: candidate.appName,
@@ -375,12 +455,13 @@ export function analyzeMobileApp(
 
   // Signal A: Name Similarity (0 - 25)
   let nameSimilarityScore = 0;
+  let exactNameCloneScore = 0;
   if (bestNameSimilarity >= 0.95) {
-    nameSimilarityScore = 25;
+    nameSimilarityScore = SCORING_WEIGHTS.nameSimilarity;
     signals.push({
       type: 'name_similarity',
-      score: 25,
-      weight: 25,
+      score: SCORING_WEIGHTS.nameSimilarity,
+      weight: SCORING_WEIGHTS.nameSimilarity,
       explanation: `Application name "${candidate.appName}" matches registered brand identity with high fidelity (${Math.round(bestNameSimilarity * 100)}%).`,
       highlightDetails: {
         candidateValue: candidate.appName,
@@ -388,14 +469,14 @@ export function analyzeMobileApp(
       },
     });
   } else if (bestNameSimilarity >= 0.8 || containsFullBrand) {
-    nameSimilarityScore = 20;
+    nameSimilarityScore = Math.round(SCORING_WEIGHTS.nameSimilarity * 0.8);
     const patternDesc = containsFullBrand
       ? `Application name "${candidate.appName}" embeds protected brand name with added words.`
       : `Application name "${candidate.appName}" is highly similar to registered brand identity (${Math.round(bestNameSimilarity * 100)}%).`;
     signals.push({
       type: 'name_similarity',
-      score: 20,
-      weight: 25,
+      score: Math.round(SCORING_WEIGHTS.nameSimilarity * 0.8),
+      weight: SCORING_WEIGHTS.nameSimilarity,
       explanation: patternDesc,
       highlightDetails: {
         candidateValue: candidate.appName,
@@ -403,20 +484,39 @@ export function analyzeMobileApp(
       },
     });
   } else if (bestNameSimilarity >= 0.6) {
-    nameSimilarityScore = 12;
+    nameSimilarityScore = Math.round(SCORING_WEIGHTS.nameSimilarity * 0.48);
     signals.push({
       type: 'name_similarity',
-      score: 12,
-      weight: 25,
+      score: Math.round(SCORING_WEIGHTS.nameSimilarity * 0.48),
+      weight: SCORING_WEIGHTS.nameSimilarity,
       explanation: `Moderate brand name overlap detected (${Math.round(bestNameSimilarity * 100)}%).`,
     });
   } else if (bestNameSimilarity >= 0.4) {
-    nameSimilarityScore = 5;
+    nameSimilarityScore = Math.round(SCORING_WEIGHTS.nameSimilarity * 0.2);
     signals.push({
       type: 'name_similarity',
-      score: 5,
-      weight: 25,
+      score: Math.round(SCORING_WEIGHTS.nameSimilarity * 0.2),
+      weight: SCORING_WEIGHTS.nameSimilarity,
       explanation: `Low brand name resemblance (${Math.round(bestNameSimilarity * 100)}%).`,
+    });
+  }
+
+  const normalizedOfficialAppName = normalizeComparisonString(bestMatchedApp?.appName || brand.name);
+  const comparisonCandidateName = normalizeComparisonString(appNameHomoglyph.normalized);
+  if (
+    bestMatchedApp &&
+    comparisonCandidateName === normalizedOfficialAppName &&
+    !brand.knownPublishers.some((publisher) => normalizeString(publisher) === normalizeString(candidate.publisher))
+  ) {
+    exactNameCloneScore = SCORING_WEIGHTS.exactNameClone;
+    signals.push({
+      type: 'name_similarity',
+      score: exactNameCloneScore,
+      weight: exactNameCloneScore,
+      explanation: 'The candidate uses the exact registered app name while naming an unrecognized publisher.',
+      pointsContributed: exactNameCloneScore,
+      signal: 'exact_name_clone',
+      reason: 'Exact official app name paired with an unrecognized publisher.',
     });
   }
 
@@ -428,11 +528,11 @@ export function analyzeMobileApp(
   ) || (bestMatchedApp && normalizeString(bestMatchedApp.publisher) === candidatePubNorm);
 
   if (!isKnownPublisher && nameSimilarityScore >= 12) {
-    publisherMismatchScore = 20;
+    publisherMismatchScore = SCORING_WEIGHTS.publisherMismatch;
     signals.push({
       type: 'publisher_mismatch',
-      score: 20,
-      weight: 20,
+      score: SCORING_WEIGHTS.publisherMismatch,
+      weight: SCORING_WEIGHTS.publisherMismatch,
       explanation: `Publisher "${candidate.publisher}" does not match registered official publisher "${bestMatchedApp?.publisher || brand.knownPublishers.join(', ')}".`,
       highlightDetails: {
         candidateValue: candidate.publisher,
@@ -440,11 +540,11 @@ export function analyzeMobileApp(
       },
     });
   } else if (!isKnownPublisher && nameSimilarityScore >= 5) {
-    publisherMismatchScore = 10;
+    publisherMismatchScore = Math.round(SCORING_WEIGHTS.publisherMismatch * 0.5);
     signals.push({
       type: 'publisher_mismatch',
-      score: 10,
-      weight: 20,
+      score: Math.round(SCORING_WEIGHTS.publisherMismatch * 0.5),
+      weight: SCORING_WEIGHTS.publisherMismatch,
       explanation: `Publisher "${candidate.publisher}" is not in the organization's verified publisher whitelist.`,
     });
   }
@@ -456,20 +556,20 @@ export function analyzeMobileApp(
     (kd) => normalizeString(kd) === candidateDevNorm
   ) || (bestMatchedApp && normalizeString(bestMatchedApp.developer) === candidateDevNorm);
 
-  if (!isKnownDeveloper && nameSimilarityScore >= 12) {
-    developerMismatchScore = 15;
+  if (!isKnownDeveloper && candidateDevNorm !== candidatePubNorm && nameSimilarityScore >= 12) {
+    developerMismatchScore = SCORING_WEIGHTS.developerMismatch;
     signals.push({
       type: 'developer_mismatch',
-      score: 15,
-      weight: 15,
+      score: SCORING_WEIGHTS.developerMismatch,
+      weight: SCORING_WEIGHTS.developerMismatch,
       explanation: `Developer "${candidate.developer}" does not match the official developer on record.`,
       highlightDetails: {
         candidateValue: candidate.developer,
         officialValue: bestMatchedApp?.developer || 'Official Engineering Team',
       },
     });
-  } else if (!isKnownDeveloper && nameSimilarityScore >= 5) {
-    developerMismatchScore = 8;
+  } else if (!isKnownDeveloper && candidateDevNorm !== candidatePubNorm && nameSimilarityScore >= 5) {
+    developerMismatchScore = Math.round(SCORING_WEIGHTS.developerMismatch * 0.53);
   }
 
   // Signal D: Description Similarity & Brand Phrasing (0 - 15)
@@ -482,37 +582,39 @@ export function analyzeMobileApp(
   );
 
   if (jaccardDesc >= 0.5 || brandKeywordsContained.length >= 3) {
-    descriptionSimilarityScore = 15;
+    descriptionSimilarityScore = SCORING_WEIGHTS.descriptionSimilarity;
     signals.push({
       type: 'description_similarity',
-      score: 15,
-      weight: 15,
+      score: SCORING_WEIGHTS.descriptionSimilarity,
+      weight: SCORING_WEIGHTS.descriptionSimilarity,
       explanation: `Description heavily replicates brand proprietary phrasing and keywords: [${brandKeywordsContained.join(', ')}].`,
       evidenceSnippet: candidate.description.slice(0, 140) + '...',
     });
   } else if (jaccardDesc >= 0.25 || brandKeywordsContained.length >= 1) {
-    descriptionSimilarityScore = 8;
+    descriptionSimilarityScore = Math.round(SCORING_WEIGHTS.descriptionSimilarity * 0.53);
     signals.push({
       type: 'description_similarity',
-      score: 8,
-      weight: 15,
+      score: Math.round(SCORING_WEIGHTS.descriptionSimilarity * 0.53),
+      weight: SCORING_WEIGHTS.descriptionSimilarity,
       explanation: `Candidate description references official brand terminology (${brandKeywordsContained.join(', ')}).`,
     });
   }
 
   // Signal E: Logo / Icon Similarity (0 - 10)
   let logoSimilarityScore = 0;
-  const logoSim = computeLogoSimilarity(candidate.iconUrl, bestMatchedApp?.iconUrl || brand.logoUrl);
+  const officialLogoHash = bestMatchedApp?.logoHash || brand.logoHash;
+  const logoDistance = perceptualHashDistance(candidate.logoHash, officialLogoHash);
+  const logoSim = computeLogoSimilarity(candidate.logoHash, officialLogoHash);
   if (logoSim >= 0.75 && nameSimilarityScore >= 12) {
-    logoSimilarityScore = 10;
+    logoSimilarityScore = SCORING_WEIGHTS.logoSimilarity;
     signals.push({
       type: 'logo_similarity',
-      score: 10,
-      weight: 10,
-      explanation: `Application icon strongly replicates the official brand emblem (${Math.round(logoSim * 100)}% visual signature match).`,
+      score: SCORING_WEIGHTS.logoSimilarity,
+      weight: SCORING_WEIGHTS.logoSimilarity,
+      explanation: `Application icon dHash differs from the registered official logo by ${logoDistance} of 64 bits (${Math.round(logoSim * 100)}% similarity).`,
     });
   } else if (logoSim >= 0.5) {
-    logoSimilarityScore = 5;
+    logoSimilarityScore = Math.round(SCORING_WEIGHTS.logoSimilarity * 0.5);
   }
 
   // Signal F: Package ID Mismatch (0 - 5)
@@ -520,11 +622,11 @@ export function analyzeMobileApp(
   if (bestMatchedApp) {
     const pkgMatch = candidate.packageId.toLowerCase() === bestMatchedApp.packageId.toLowerCase();
     if (!pkgMatch && nameSimilarityScore >= 12) {
-      packageMismatchScore = 5;
+      packageMismatchScore = SCORING_WEIGHTS.packageMismatch;
       signals.push({
         type: 'package_mismatch',
-        score: 5,
-        weight: 5,
+        score: SCORING_WEIGHTS.packageMismatch,
+        weight: SCORING_WEIGHTS.packageMismatch,
         explanation: `Candidate bundle/package ID "${candidate.packageId}" differs from legitimate package ID "${bestMatchedApp.packageId}".`,
         highlightDetails: {
           candidateValue: candidate.packageId,
@@ -539,11 +641,11 @@ export function analyzeMobileApp(
   if (candidate.website) {
     const isAffiliated = isDomainAffiliated(candidate.website, brand.officialDomains);
     if (!isAffiliated && nameSimilarityScore >= 12) {
-      domainMismatchScore = 5;
+      domainMismatchScore = SCORING_WEIGHTS.domainMismatch;
       signals.push({
         type: 'domain_mismatch',
-        score: 5,
-        weight: 5,
+        score: SCORING_WEIGHTS.domainMismatch,
+        weight: SCORING_WEIGHTS.domainMismatch,
         explanation: `Support website "${candidate.website}" is not hosted on any authorized company domain (${brand.officialDomains.join(', ')}).`,
         highlightDetails: {
           candidateValue: candidate.website,
@@ -564,15 +666,45 @@ export function analyzeMobileApp(
   );
 
   if (foundPhrases.length > 0 || foundSuspiciousPerms.length > 0) {
-    suspiciousKeywordsScore = 5;
+    suspiciousKeywordsScore = SCORING_WEIGHTS.suspiciousLanguage;
     const reasons: string[] = [];
     if (foundPhrases.length > 0) reasons.push(`High-risk phrases: [${foundPhrases.slice(0, 3).join(', ')}]`);
     if (foundSuspiciousPerms.length > 0) reasons.push(`Sensitive permissions: [${foundSuspiciousPerms.slice(0, 2).join(', ')}]`);
     signals.push({
       type: 'suspicious_keywords',
-      score: 5,
-      weight: 5,
+      score: SCORING_WEIGHTS.suspiciousLanguage,
+      weight: SCORING_WEIGHTS.suspiciousLanguage,
       explanation: reasons.join('; '),
+    });
+  }
+  const accountVerificationScore = /\b(account verification|verify your account|login to|log in to|sign in to)\b/i.test(candidate.description)
+    ? SCORING_WEIGHTS.accountVerification
+    : 0;
+  if (accountVerificationScore) {
+    signals.push({
+      type: 'suspicious_keywords',
+      score: accountVerificationScore,
+      weight: SCORING_WEIGHTS.accountVerification,
+      explanation: 'Description asks users to log in or verify an account.',
+    });
+  }
+
+  if (logoDistance === null) {
+    signals.push({
+      type: 'logo_comparison_skipped',
+      score: 0,
+      weight: SCORING_WEIGHTS.logoSimilarity,
+      explanation: 'Logo comparison skipped because a candidate or official 64-bit logo hash is unavailable.',
+    });
+  }
+
+  const recentCreationScore = isRecentlyCreated(candidate.createdAt) ? SCORING_WEIGHTS.recentCreation : 0;
+  if (recentCreationScore) {
+    signals.push({
+      type: 'recent_creation',
+      score: recentCreationScore,
+      weight: SCORING_WEIGHTS.recentCreation,
+      explanation: 'Candidate creation date is within the last 14 days.',
     });
   }
 
@@ -586,11 +718,14 @@ export function analyzeMobileApp(
     logoSimilarityScore +
     packageMismatchScore +
     domainMismatchScore +
-    suspiciousKeywordsScore;
+    suspiciousKeywordsScore +
+    accountVerificationScore +
+    recentCreationScore +
+    exactNameCloneScore;
 
   // Add homoglyph weight if detected
   if (appNameHomoglyph.hasHomoglyphs) {
-    rawScore = Math.min(100, rawScore + 10);
+    rawScore = Math.min(MAX_RISK_SCORE, rawScore + SCORING_WEIGHTS.homoglyph);
   }
 
   // Critical safeguard: If name similarity is 0 and no brand tokens exist, cap score to prevent false positives
@@ -598,7 +733,7 @@ export function analyzeMobileApp(
     rawScore = Math.min(rawScore, 14);
   }
 
-  const finalScore = Math.min(100, Math.max(0, rawScore));
+  const finalScore = Math.min(MAX_RISK_SCORE, Math.max(0, rawScore));
 
   // Determine Risk Level & Classification
   let riskLevel: RiskLevel = 'informational';
@@ -606,22 +741,22 @@ export function analyzeMobileApp(
   let recommendedAction = 'Continue routine monitoring.';
   let confidence = 0.75;
 
-  if (finalScore >= 80) {
+  if (finalScore >= SEVERITY_THRESHOLDS.critical) {
     riskLevel = 'critical';
     classification = 'high_risk_impersonation';
     confidence = 0.94;
     recommendedAction = 'Initiate immediate app store takedown escalation and publish consumer security advisory.';
-  } else if (finalScore >= 60) {
+  } else if (finalScore >= SEVERITY_THRESHOLDS.high) {
     riskLevel = 'high';
     classification = 'potential_impersonation';
     confidence = 0.88;
     recommendedAction = 'Review publisher authenticity, inspect APK/IPA binary permissions, and verify developer ownership.';
-  } else if (finalScore >= 35) {
+  } else if (finalScore >= SEVERITY_THRESHOLDS.medium) {
     riskLevel = 'medium';
     classification = 'suspicious';
     confidence = 0.80;
     recommendedAction = 'Assign analyst to verify relationship and monitor version updates.';
-  } else if (finalScore >= 15) {
+  } else if (finalScore >= SEVERITY_THRESHOLDS.low) {
     riskLevel = 'low';
     classification = 'likely_legitimate';
     confidence = 0.72;
@@ -629,11 +764,11 @@ export function analyzeMobileApp(
   }
 
   const summaryExplanation =
-    finalScore >= 80
+    finalScore >= SEVERITY_THRESHOLDS.critical
       ? `High-confidence impersonation candidate. Replicates "${bestMatchedApp?.appName || brand.name}" while published by unauthorized entity "${candidate.publisher}".`
-      : finalScore >= 60
+      : finalScore >= SEVERITY_THRESHOLDS.high
       ? `Potential unauthorized derivative or publisher mismatch masquerading as ${brand.name}.`
-      : finalScore >= 35
+      : finalScore >= SEVERITY_THRESHOLDS.medium
       ? `Suspicious application bearing partial brand naming cues.`
       : `Application demonstrates low correlation with protected assets.`;
 
@@ -643,7 +778,7 @@ export function analyzeMobileApp(
     classification,
     confidence,
     isOfficialAsset: false,
-    signals,
+    signals: evidenceWithContributions(signals),
     radarBreakdown: {
       nameSimilarity: nameSimilarityScore,
       publisherMismatch: publisherMismatchScore,
@@ -657,6 +792,10 @@ export function analyzeMobileApp(
     recommendedAction,
     matchedOfficialAsset: bestMatchedApp,
     summaryExplanation,
+    scoreBreakdown: signals.reduce<Record<string, number>>((result, signal) => {
+      result[signal.type] = (result[signal.type] || 0) + signal.score;
+      return result;
+    }, {}),
   };
 }
 
@@ -721,8 +860,8 @@ export function analyzeSocialCandidate(
     const allFound = [...handleHomoglyphs.detectedChars, ...nameHomoglyphs.detectedChars];
     signals.push({
       type: 'homoglyph_detected',
-      score: 20,
-      weight: 20,
+      score: SCORING_WEIGHTS.homoglyph,
+      weight: SCORING_WEIGHTS.homoglyph,
       explanation: `Homoglyph character substitution detected: [${allFound.join(', ')}]. Highly characteristic of typo-squatting or visual spoofing.`,
       highlightDetails: {
         candidateValue: candidate.username,
@@ -741,11 +880,11 @@ export function analyzeSocialCandidate(
 
   let usernameSimilarityScore = 0;
   if (handleSim >= 0.9) {
-    usernameSimilarityScore = 25;
+    usernameSimilarityScore = SCORING_WEIGHTS.socialUsernameSimilarity;
     signals.push({
       type: 'username_similarity',
-      score: 25,
-      weight: 25,
+      score: SCORING_WEIGHTS.socialUsernameSimilarity,
+      weight: SCORING_WEIGHTS.socialUsernameSimilarity,
       explanation: `Username @${candidate.username} is nearly indistinguishable from official brand identifier (@${officialOnPlatform?.handle || brand.name}).`,
       highlightDetails: {
         candidateValue: candidate.username,
@@ -753,11 +892,11 @@ export function analyzeSocialCandidate(
       },
     });
   } else if (brandInHandle) {
-    usernameSimilarityScore = 20;
+    usernameSimilarityScore = Math.round(SCORING_WEIGHTS.socialUsernameSimilarity * 0.8);
     signals.push({
       type: 'username_similarity',
-      score: 20,
-      weight: 25,
+      score: Math.round(SCORING_WEIGHTS.socialUsernameSimilarity * 0.8),
+      weight: SCORING_WEIGHTS.socialUsernameSimilarity,
       explanation: `Username contains core brand token "${brand.name}" combined with modifier terms (e.g., support/help/official).`,
       highlightDetails: {
         candidateValue: candidate.username,
@@ -765,7 +904,7 @@ export function analyzeSocialCandidate(
       },
     });
   } else if (handleSim >= 0.6) {
-    usernameSimilarityScore = 10;
+    usernameSimilarityScore = Math.round(SCORING_WEIGHTS.socialUsernameSimilarity * 0.4);
   }
 
   // Display Name Similarity
@@ -778,15 +917,15 @@ export function analyzeSocialCandidate(
   const displayNameContainsBrand = normCandidateDisplayName.includes(normBrand);
 
   if (displayNameSim >= 0.85 || displayNameContainsBrand) {
-    nameSimScore = 20;
+    nameSimScore = SCORING_WEIGHTS.socialDisplayNameSimilarity;
     signals.push({
       type: 'name_similarity',
-      score: 20,
-      weight: 20,
+      score: SCORING_WEIGHTS.socialDisplayNameSimilarity,
+      weight: SCORING_WEIGHTS.socialDisplayNameSimilarity,
       explanation: `Profile display name "${candidate.profileName}" mimics protected brand name "${brand.name}".`,
     });
   } else if (displayNameSim >= 0.6) {
-    nameSimScore = 10;
+    nameSimScore = Math.round(SCORING_WEIGHTS.socialDisplayNameSimilarity * 0.5);
   }
 
   // Bio / Suspicious Phrasing
@@ -796,11 +935,11 @@ export function analyzeSocialCandidate(
   );
 
   if (bioPhrases.length > 0) {
-    suspiciousKeywordsScore = 15;
+    suspiciousKeywordsScore = SCORING_WEIGHTS.socialSuspiciousLanguage;
     signals.push({
       type: 'suspicious_keywords',
-      score: 15,
-      weight: 15,
+      score: SCORING_WEIGHTS.socialSuspiciousLanguage,
+      weight: SCORING_WEIGHTS.socialSuspiciousLanguage,
       explanation: `Biography incorporates high-risk social engineering lures: [${bioPhrases.join(', ')}].`,
       evidenceSnippet: candidate.biography,
     });
@@ -813,11 +952,11 @@ export function analyzeSocialCandidate(
       (link) => !isDomainAffiliated(link, brand.officialDomains)
     );
     if (unverifiedLinks.length > 0 && (brandInHandle || nameSimScore >= 10)) {
-      domainMismatchScore = 15;
+      domainMismatchScore = SCORING_WEIGHTS.socialDomainMismatch;
       signals.push({
         type: 'domain_mismatch',
-        score: 15,
-        weight: 15,
+        score: SCORING_WEIGHTS.socialDomainMismatch,
+        weight: SCORING_WEIGHTS.socialDomainMismatch,
         explanation: `External bio links point to unauthorized third-party destinations (${unverifiedLinks.slice(0, 2).join(', ')}).`,
         highlightDetails: {
           candidateValue: unverifiedLinks[0],
@@ -830,28 +969,49 @@ export function analyzeSocialCandidate(
   // Verification Mismatch (if official account is verified but candidate is not)
   let verificationScore = 0;
   if (officialOnPlatform?.verified && !candidate.verified && (brandInHandle || nameSimScore >= 10)) {
-    verificationScore = 10;
+    verificationScore = SCORING_WEIGHTS.verificationMismatch;
     signals.push({
       type: 'verification_mismatch',
-      score: 10,
-      weight: 10,
+      score: SCORING_WEIGHTS.verificationMismatch,
+      weight: SCORING_WEIGHTS.verificationMismatch,
       explanation: `Official handle @${officialOnPlatform.handle} holds verified status, while candidate profile lacks verification badge.`,
     });
   }
 
   // Logo similarity
   let logoScore = 0;
-  if (candidate.avatarUrl && (brandInHandle || nameSimScore >= 10)) {
-    const sim = computeLogoSimilarity(candidate.avatarUrl, brand.logoUrl);
+  const officialSocialLogoHash = officialOnPlatform?.avatarHash || brand.logoHash;
+  const socialLogoDistance = perceptualHashDistance(candidate.avatarHash, officialSocialLogoHash);
+  if (socialLogoDistance !== null && (brandInHandle || nameSimScore >= 10)) {
+    const sim = computeLogoSimilarity(candidate.avatarHash, officialSocialLogoHash);
     if (sim >= 0.7) {
-      logoScore = 10;
+      logoScore = SCORING_WEIGHTS.logoSimilarity;
       signals.push({
         type: 'logo_similarity',
-        score: 10,
-        weight: 10,
-        explanation: 'Profile avatar displays significant similarity to registered corporate logo.',
+        score: SCORING_WEIGHTS.logoSimilarity,
+        weight: SCORING_WEIGHTS.logoSimilarity,
+        explanation: `Profile avatar dHash differs from the registered official logo by ${socialLogoDistance} of 64 bits (${Math.round(sim * 100)}% similarity).`,
       });
     }
+  }
+
+  if (socialLogoDistance === null) {
+    signals.push({
+      type: 'logo_comparison_skipped',
+      score: 0,
+      weight: SCORING_WEIGHTS.logoSimilarity,
+      explanation: 'Logo comparison skipped because a candidate or official 64-bit logo hash is unavailable.',
+    });
+  }
+
+  const recentCreationScore = isRecentlyCreated(candidate.createdAt) ? SCORING_WEIGHTS.recentCreation : 0;
+  if (recentCreationScore) {
+    signals.push({
+      type: 'recent_creation',
+      score: recentCreationScore,
+      weight: SCORING_WEIGHTS.recentCreation,
+      explanation: 'Candidate creation date is within the last 14 days.',
+    });
   }
 
   let totalScore =
@@ -860,10 +1020,11 @@ export function analyzeSocialCandidate(
     suspiciousKeywordsScore +
     domainMismatchScore +
     verificationScore +
-    logoScore;
+    logoScore +
+    recentCreationScore;
 
   if (handleHomoglyphs.hasHomoglyphs || nameHomoglyphs.hasHomoglyphs) {
-    totalScore = Math.min(100, totalScore + 15);
+    totalScore = Math.min(MAX_RISK_SCORE, totalScore + SCORING_WEIGHTS.homoglyph);
   }
 
   // If no handle or name relation, cap score
@@ -871,40 +1032,40 @@ export function analyzeSocialCandidate(
     totalScore = Math.min(totalScore, 10);
   }
 
-  const finalScore = Math.min(100, Math.max(0, totalScore));
+  const finalScore = Math.min(MAX_RISK_SCORE, Math.max(0, totalScore));
 
   let riskLevel: RiskLevel = 'informational';
   let classification: ThreatClassification = 'likely_legitimate';
   let recommendedAction = 'Routine passive observation.';
   let confidence = 0.75;
 
-  if (finalScore >= 80) {
+  if (finalScore >= SEVERITY_THRESHOLDS.critical) {
     riskLevel = 'critical';
     classification = 'high_risk_impersonation';
     confidence = 0.95;
     recommendedAction = 'Execute fast-track brand impersonation DMCA / Terms of Service takedown notice via platform API.';
-  } else if (finalScore >= 60) {
+  } else if (finalScore >= SEVERITY_THRESHOLDS.high) {
     riskLevel = 'high';
     classification = 'potential_impersonation';
     confidence = 0.88;
     recommendedAction = 'Issue platform report for deceptive impersonation and monitor direct messaging activities.';
-  } else if (finalScore >= 35) {
+  } else if (finalScore >= SEVERITY_THRESHOLDS.medium) {
     riskLevel = 'medium';
     classification = 'suspicious';
     confidence = 0.79;
     recommendedAction = 'Add account to high-frequency watchlist; track handle and bio modifications.';
-  } else if (finalScore >= 15) {
+  } else if (finalScore >= SEVERITY_THRESHOLDS.low) {
     riskLevel = 'low';
     classification = 'likely_legitimate';
     confidence = 0.70;
   }
 
   const summaryExplanation =
-    finalScore >= 80
+    finalScore >= SEVERITY_THRESHOLDS.critical
       ? `High-risk social profile spoofing @${officialOnPlatform?.handle || brand.name} using brand imagery, lures, and unauthorized web links.`
-      : finalScore >= 60
+      : finalScore >= SEVERITY_THRESHOLDS.high
       ? `Potential unauthorized brand representative profile targeting ${brand.name} customers.`
-      : finalScore >= 35
+      : finalScore >= SEVERITY_THRESHOLDS.medium
       ? `Account shares keywords with ${brand.name} but lacks definitive proof of malicious intent.`
       : `Profile shows incidental keyword overlap with registered brand.`;
 
@@ -914,7 +1075,7 @@ export function analyzeSocialCandidate(
     classification,
     confidence,
     isOfficialAsset: false,
-    signals,
+    signals: evidenceWithContributions(signals),
     radarBreakdown: {
       nameSimilarity: nameSimScore,
       publisherMismatch: 0,
@@ -928,5 +1089,9 @@ export function analyzeSocialCandidate(
     recommendedAction,
     matchedOfficialAsset: officialOnPlatform,
     summaryExplanation,
+    scoreBreakdown: signals.reduce<Record<string, number>>((result, signal) => {
+      result[signal.type] = (result[signal.type] || 0) + signal.score;
+      return result;
+    }, {}),
   };
 }

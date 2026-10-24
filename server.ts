@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const isDevServer = process.argv.includes('--dev');
   // Connect to the Sentinel Shield database
     const databaseUrl = process.env.MONGODB_URI 
 
@@ -30,7 +31,7 @@ async function startServer() {
   // Serve static assets if exists
   app.use(express.static(path.resolve(process.cwd(), 'public')));
 
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && !isDevServer) {
     // In production, serve built dist files
     const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));

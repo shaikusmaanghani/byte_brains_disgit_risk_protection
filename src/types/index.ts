@@ -52,6 +52,7 @@ export interface OfficialApp {
   category: string;
   iconUrl?: string;
   officialDomain?: string;
+  logoHash?: string;
 }
 
 export interface OfficialSocialAccount {
@@ -62,12 +63,14 @@ export interface OfficialSocialAccount {
   profileUrl: string;
   verified: boolean;
   avatarUrl?: string;
+  avatarHash?: string;
 }
 
 export interface BrandProfile {
   id: string;
   name: string;
   logoUrl: string;
+  logoHash?: string;
   aliases: string[];
   officialDomains: string[];
   brandKeywords: string[];
@@ -99,10 +102,15 @@ export interface DetectionSignal {
     | 'character_swap'
     | 'verification_mismatch'
     | 'suspicious_support_links'
-    | 'suspicious_permissions';
+    | 'suspicious_permissions'
+    | 'logo_comparison_skipped'
+    | 'recent_creation';
   score: number;
   weight: number;
   explanation: string;
+  pointsContributed?: number;
+  signal?: string;
+  reason?: string;
   evidenceSnippet?: string;
   highlightDetails?: {
     candidateValue?: string;
@@ -124,6 +132,8 @@ export interface AppCandidateInput {
   version?: string;
   permissions?: string[];
   website?: string;
+  createdAt?: string;
+  logoHash?: string;
 }
 
 export interface SocialCandidateInput {
@@ -137,6 +147,8 @@ export interface SocialCandidateInput {
   avatarUrl?: string;
   links?: string[];
   keywords?: string[];
+  createdAt?: string;
+  avatarHash?: string;
 }
 
 export interface AnalysisResult {
@@ -159,6 +171,7 @@ export interface AnalysisResult {
   recommendedAction: string;
   matchedOfficialAsset?: OfficialApp | OfficialSocialAccount | null;
   summaryExplanation: string;
+  scoreBreakdown?: Record<string, number>;
 }
 
 export interface InvestigationNote {
@@ -197,6 +210,62 @@ export interface Finding {
   matchedOfficialAsset?: OfficialApp | OfficialSocialAccount | null;
   candidatePayload: Record<string, any>;
   isSimulated: boolean;
+  investigationStatus?: InvestigationStatus;
+  scoreBreakdown?: Record<string, number>;
+  history?: InvestigationHistoryEntry[];
+  isOfficialAsset?: boolean;
+  source?: {
+    platform: PlatformType;
+    url: string;
+    identifier: string;
+    discovered_at: string;
+  };
+  suspectedAsset?: {
+    type: 'profile' | 'page' | 'app';
+    name: string;
+    handle?: string;
+    publisherOrDeveloper?: string;
+    description?: string;
+    logo_ref?: string;
+  };
+  imitates?: {
+    official_asset_id?: string;
+    official_asset_name: string;
+  };
+  evidence?: Array<{
+    signal: string;
+    weight: number;
+    points_contributed: number;
+    reason: string;
+  }>;
+  officialAssetDetails?: {
+    name: string;
+    publisherOrDeveloper?: string;
+    description?: string;
+    logoRef?: string;
+  };
+}
+
+export type InvestigationStatus = 'New' | 'Under Review' | 'Confirmed' | 'False Positive' | 'Closed';
+
+export interface InvestigationHistoryEntry {
+  timestamp: string;
+  actor: string;
+  action: string;
+  fromStatus?: InvestigationStatus;
+  toStatus?: InvestigationStatus;
+  note?: string;
+}
+
+export interface DetectionAlert {
+  id: string;
+  stableKey: string;
+  detectionId: string;
+  score: number;
+  severity: RiskLevel;
+  createdAt: string;
+  read: boolean;
+  escalated: boolean;
 }
 
 export interface MonitoringSource {
